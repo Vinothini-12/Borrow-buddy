@@ -1,4 +1,10 @@
-# Dedicated Postgres for BorrowBuddy only. Data lives in the named volume below.
+# BorrowBuddy: full stack in Docker.
+#   cp .env.example .env   (set JWT_SECRET)
+#   docker compose up -d --build
+#   open http://localhost:8080
+#
+# Running only the database for local development still works:  docker compose up -d db
+
 services:
   db:
     image: postgres:16-alpine
@@ -6,9 +12,44 @@ services:
     environment:
       POSTGRES_USER: borrowbuddy
       POSTGRES_PASSWORD: borrowbuddy
+      POSTGRES_DB: borrowbuddy
     ports:
-      - "5433:5432"
+      - "5433:5432" # published for local (non-Docker) development; not needed by the containers
     volumes:
       - borrowbuddy_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U borrowbuddy -d borrowbuddy"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  server:
+    build: ./server
+    container_name: borrowbuddy-server
+    environment:
+      DATABASE_URL: postgres://borrowbuddy:borrowbuddy@db:5432/borrowbuddy
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
+      PORT: 5050
+      CLIENT_URL: http://localhost:${WEB_PORT:-8080}
+      DB_SSL: "false"
+      SEED_DEMO: ${SEED_DEMO:-true}
+    volumes:
+      - borrowbuddy_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  client:
+    build: ./client
+    container_name: borrowbuddy-client
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
 volumes:
   borrowbuddy_pgdata:
+  borrowbuddy_uploads:

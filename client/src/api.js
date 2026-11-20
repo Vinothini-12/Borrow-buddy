@@ -1,4 +1,5 @@
-export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5050').replace(/\/$/, '')
+// Unset -> local dev API. Empty string -> same origin (Docker: nginx proxies /api and /uploads).
+export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:5050').replace(/\/$/, '')
 
 const TOKEN_KEY = 'borrowbuddy_token'
 

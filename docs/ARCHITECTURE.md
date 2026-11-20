@@ -8,22 +8,24 @@
 | Backend | Node.js + Express 5, `pg`, `bcrypt`, `jsonwebtoken`, `multer`, `cors`, `dotenv`, `zod` |
 | Database | PostgreSQL 16 (local Docker container), plain SQL migration files |
 | Auth | JWT bearer tokens (7-day expiry), stored in `localStorage` on the client |
+| Deployment | Docker Compose: `postgres:16-alpine`, `node:22-alpine` API, Vite build served by `nginx:1.27-alpine` (proxies `/api`, `/uploads`) |
 | Images | Uploaded with `multer` to `server/uploads/`, served statically at `/uploads/<file>`; path stored in `items.image_url` |
 
 ## Folder structure
 
 ```
 borrowbuddy/
-├── docker-compose.yml          # dedicated Postgres for this project (host port 5433)
+├── docker-compose.yml          # db + server + client(nginx) stack; db published on 5433 for local dev
+├── .env.example                # Compose variables
 ├── README.md
 ├── docs/                       # SCOPE, ARCHITECTURE, API, DATABASE, TESTING
 ├── server/
-│   ├── .env.example
+│   ├── Dockerfile  .dockerignore  .env.example
 │   ├── migrations/001_init.sql # schema
 │   ├── seeds/seed.sql          # 4 demo users, 4 demo items
 │   ├── scripts/
 │   │   ├── dbTarget.js         # parses DATABASE_URL, refuses any db not named "borrowbuddy"
-│   │   ├── create.js migrate.js seed.js reset.js
+│   │   ├── create.js migrate.js seed.js reset.js seedIfEmpty.js
 │   │   └── smoke.js            # end-to-end API test (npm run smoke)
 │   ├── uploads/                # item photos (git-ignored)
 │   └── src/
@@ -34,7 +36,7 @@ borrowbuddy/
 │       ├── routes/             # auth.js, items.js, requests.js
 │       └── utils/              # httpError.js, dates.js
 └── client/
-    ├── .env.example
+    ├── Dockerfile  nginx.conf  .dockerignore  .env.example
     └── src/
         ├── main.jsx App.jsx api.js constants.js index.css
         ├── context/AuthContext.jsx

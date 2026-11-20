@@ -10,6 +10,45 @@ PERN prototype: PostgreSQL · Express · React (Vite) · Node.js.
 - [docs/DATABASE.md](docs/DATABASE.md): tables, constraints, state machine
 - [docs/TESTING.md](docs/TESTING.md): automated smoke test and manual checklist
 
+## Run with Docker (quickest)
+
+Requires Docker Desktop (or Docker Engine with Compose v2).
+
+```bash
+cp .env.example .env                      # then set JWT_SECRET (openssl rand -hex 32)
+docker compose up -d --build
+```
+
+Open **http://localhost:8080**. On first start the server container applies migrations and loads the demo accounts (listed below) if the database is empty.
+
+| Container | What it is | Host port |
+| --- | --- | --- |
+| `borrowbuddy-client` | nginx serving the built React app; proxies `/api` and `/uploads` to the server | **8080** (`WEB_PORT`) |
+| `borrowbuddy-server` | Express API; runs `migrate` and `seed-if-empty` on start | not published |
+| `borrowbuddy-db` | Postgres 16, database `borrowbuddy` | 5433 (for local dev tools only) |
+
+Data lives in the named volumes `borrowbuddy_pgdata` (database) and `borrowbuddy_uploads` (photos), so it survives restarts and rebuilds.
+
+Useful commands:
+
+```bash
+docker compose logs -f server                       # API logs
+docker compose exec server npm run db:reset         # wipe and reseed demo data
+docker compose up -d --build                        # rebuild after code changes
+docker compose down                                 # stop and remove containers (data kept)
+docker compose down -v                              # also delete the database and photos
+```
+
+Root `.env` variables (used only by Docker Compose):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `JWT_SECRET` | *(required)* | Token signing secret; Compose refuses to start without it |
+| `WEB_PORT` | `8080` | Host port for the web app |
+| `SEED_DEMO` | `true` | Seed demo users/items on first start when the DB is empty |
+
+The rest of this README covers running without Docker for development.
+
 ## Prerequisites
 
 - **Node.js 20+** (developed on Node 25) and npm
@@ -20,8 +59,8 @@ PERN prototype: PostgreSQL · Express · React (Vite) · Node.js.
 ## Setup
 
 ```bash
-# 1. Start the dedicated database (skip if you use your own Postgres)
-docker compose up -d
+# 1. Start only the dedicated database (skip if you use your own Postgres)
+docker compose up -d db
 
 # 2. Server
 cd server
@@ -37,7 +76,7 @@ npm install
 cp .env.example .env
 ```
 
-> With the Docker setup, Postgres creates a database named after `POSTGRES_USER` (`borrowbuddy`) on first start, so `db:create` just reports that it already exists.
+> With the Docker database, `borrowbuddy` is created on first start, so `db:create` just reports that it already exists. The Docker stack and local dev share the same database volume. Stop the `server`/`client` containers (`docker compose stop server client`) if you run the dev servers, so you don't have two copies of the app running.
 
 ## Environment variables
 
@@ -103,7 +142,8 @@ Try it: log in as Ben and request Asha's Power Drill. Then, in a private window,
 
 ```
 borrowbuddy/
-├── docker-compose.yml   # dedicated Postgres (port 5433)
+├── docker-compose.yml   # db + server + client (nginx) stack
+├── .env.example         # Compose variables (JWT_SECRET, WEB_PORT, SEED_DEMO)
 ├── docs/                # scope, architecture, API, database, testing
 ├── server/              # Express API, SQL migrations, seeds, db scripts
 └── client/              # React + Vite app
