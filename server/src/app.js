@@ -5,6 +5,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { uploadsDir } from './paths.js';
 import authRoutes from './routes/auth.js';
 import itemRoutes from './routes/items.js';
+import requestRoutes from './routes/requests.js';
 
 export const app = express();
 
@@ -15,6 +16,7 @@ app.use('/uploads', express.static(uploadsDir));
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemRoutes);
+app.use('/api/requests', requestRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

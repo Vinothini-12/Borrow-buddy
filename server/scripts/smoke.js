@@ -181,7 +181,130 @@ async function itemTests() {
   expectStatus('deleted item is gone', await call('GET', `/api/items/${ladder?.id}`), 404);
 }
 
-const suites = { auth: authTests, items: itemTests };
+// ---------------------------------------------------------------- requests
+async function findItem(name) {
+  const res = await call('GET', `/api/items?search=${encodeURIComponent(name)}`);
+  const item = res.body?.items?.find((i) => i.name === name);
+  if (!item) throw new Error(`seed item "${name}" not found (run npm run db:reset first)`);
+  return item;
+}
+
+async function requestTests() {
+  console.log('\nRequests: happy path (A lists drill -> B requests -> approve -> borrowed -> returned)');
+  const asha = await login('asha@example.com'); // owns Power Drill
+  const ben = await login('ben@example.com');
+  const chen = await login('chen@example.com');
+  const drill = await findItem('Power Drill');
+
+  let res = await call('POST', '/api/requests', {
+    token: ben,
+    body: { item_id: drill.id, start_date: isoDate(10), end_date: isoDate(12) },
+  });
+  expectStatus('B requests drill', res, 201);
+  const r1 = res.body?.request;
+  check('new request is pending with names', r1?.status === 'pending' && r1.item_name === 'Power Drill' && r1.borrower_name === 'Ben Carter' && r1.owner_name === 'Asha Kumar', r1);
+  check('request dates are plain YYYY-MM-DD', r1?.start_date === isoDate(10) && r1?.end_date === isoDate(12), r1);
+
+  res = await call('GET', '/api/requests/mine', { token: ben });
+  check('B sees it in /mine', res.body?.requests?.some((r) => r.id === r1?.id), res.body);
+  res = await call('GET', '/api/requests/incoming', { token: asha });
+  check('A sees it in /incoming', res.body?.requests?.some((r) => r.id === r1?.id), res.body);
+  res = await call('GET', '/api/requests/incoming', { token: ben });
+  check('B does not see it in their /incoming', !res.body?.requests?.some((r) => r.id === r1?.id), res.body);
+  res = await call('GET', '/api/items/mine', { token: asha });
+  check('pending_count shows on owner item', res.body?.items?.find((i) => i.id === drill.id)?.pending_count === 1, res.body);
+
+  expectStatus('owner views request', await call('GET', `/api/requests/${r1?.id}`, { token: asha }), 200);
+  expectStatus('borrower views request', await call('GET', `/api/requests/${r1?.id}`, { token: ben }), 200);
+  expectStatus('stranger cannot view request', await call('GET', `/api/requests/${r1?.id}`, { token: chen }), 403);
+  expectStatus('missing request', await call('GET', '/api/requests/999999', { token: asha }), 404);
+  expectStatus('requests need auth', await call('GET', '/api/requests/mine'), 401);
+
+  expectStatus('borrower cannot approve', await call('PATCH', `/api/requests/${r1?.id}/approve`, { token: ben }), 403);
+  expectStatus('stranger cannot approve', await call('PATCH', `/api/requests/${r1?.id}/approve`, { token: chen }), 403);
+  expectStatus('cannot mark borrowed while pending', await call('PATCH', `/api/requests/${r1?.id}/borrowed`, { token: asha }), 409);
+  expectStatus('cannot mark returned while pending', await call('PATCH', `/api/requests/${r1?.id}/returned`, { token: asha }), 409);
+
+  res = await call('PATCH', `/api/requests/${r1?.id}/approve`, { token: asha });
+  check('A approves -> approved', res.status === 200 && res.body.request.status === 'approved', res.body);
+  expectStatus('cannot approve twice', await call('PATCH', `/api/requests/${r1?.id}/approve`, { token: asha }), 409);
+  expectStatus('cannot reject once approved', await call('PATCH', `/api/requests/${r1?.id}/reject`, { token: asha }), 409);
+  expectStatus('delete blocked while request is active', await call('DELETE', `/api/items/${drill.id}`, { token: asha }), 409);
+
+  res = await call('GET', `/api/requests/${r1?.id}`, { token: ben });
+  check('B sees the approval', res.body?.request?.status === 'approved', res.body);
+
+  console.log('\nRequests: overlap protection');
+  res = await call('POST', '/api/requests', { token: chen, body: { item_id: drill.id, start_date: isoDate(12), end_date: isoDate(14) } });
+  check('overlapping request (shares end day) -> 409 DATES_UNAVAILABLE', res.status === 409 && res.body?.error?.code === 'DATES_UNAVAILABLE', res.body);
+  res = await call('POST', '/api/requests', { token: chen, body: { item_id: drill.id, start_date: isoDate(8), end_date: isoDate(20) } });
+  check('request enclosing approved range -> 409', res.status === 409, res.body);
+  res = await call('POST', '/api/requests', { token: chen, body: { item_id: drill.id, start_date: isoDate(13), end_date: isoDate(15) } });
+  expectStatus('adjacent non-overlapping request', res, 201);
+  const adjacent = res.body?.request;
+
+  res = await call('PATCH', `/api/requests/${r1?.id}/borrowed`, { token: asha });
+  check('A marks borrowed', res.status === 200 && res.body.request.status === 'borrowed', res.body);
+  res = await call('POST', '/api/requests', { token: chen, body: { item_id: drill.id, start_date: isoDate(11), end_date: isoDate(11) } });
+  check('overlap with a borrowed request -> 409', res.status === 409, res.body);
+  expectStatus('cannot mark borrowed twice', await call('PATCH', `/api/requests/${r1?.id}/borrowed`, { token: asha }), 409);
+
+  res = await call('PATCH', `/api/requests/${r1?.id}/returned`, { token: asha });
+  check('A marks returned with returned_at', res.status === 200 && res.body.request.status === 'returned' && res.body.request.returned_at, res.body);
+  expectStatus('cannot return twice', await call('PATCH', `/api/requests/${r1?.id}/returned`, { token: asha }), 409);
+  expectStatus('cannot approve a returned request', await call('PATCH', `/api/requests/${r1?.id}/approve`, { token: asha }), 409);
+
+  console.log('\nRequests: approval-time overlap and concurrency');
+  // Two pending requests that overlap each other. Only one may be approved.
+  const ladder = await findItem('Bicycle'); // owned by Ben
+  const p1 = (await call('POST', '/api/requests', { token: chen, body: { item_id: ladder.id, start_date: isoDate(30), end_date: isoDate(33) } })).body?.request;
+  const p2 = (await call('POST', '/api/requests', { token: asha, body: { item_id: ladder.id, start_date: isoDate(32), end_date: isoDate(35) } })).body?.request;
+  check('two overlapping pending requests are allowed', p1?.id && p2?.id, { p1, p2 });
+  const [a1, a2] = await Promise.all([
+    call('PATCH', `/api/requests/${p1?.id}/approve`, { token: ben }),
+    call('PATCH', `/api/requests/${p2?.id}/approve`, { token: ben }),
+  ]);
+  const statuses = [a1.status, a2.status].sort();
+  check('concurrent approvals: exactly one 200 and one 409', statuses[0] === 200 && statuses[1] === 409, { a1: a1.body, a2: a2.body });
+  const loser = a1.status === 409 ? p1 : p2;
+  res = await call('PATCH', `/api/requests/${loser?.id}/reject`, { token: ben });
+  check('owner can still reject the conflicting one', res.status === 200 && res.body.request.status === 'rejected', res.body);
+
+  console.log('\nRequests: rejection flow');
+  const calc = await findItem('Calculator'); // owned by Chen
+  res = await call('POST', '/api/requests', { token: ben, body: { item_id: calc.id, start_date: isoDate(0), end_date: isoDate(0) } });
+  expectStatus('request starting today', res, 201);
+  const r2 = res.body?.request;
+  expectStatus('non-owner cannot reject', await call('PATCH', `/api/requests/${r2?.id}/reject`, { token: ben }), 403);
+  res = await call('PATCH', `/api/requests/${r2?.id}/reject`, { token: chen });
+  check('owner rejects -> rejected', res.status === 200 && res.body.request.status === 'rejected', res.body);
+  res = await call('GET', '/api/requests/mine', { token: ben });
+  check('borrower sees rejection', res.body?.requests?.find((r) => r.id === r2?.id)?.status === 'rejected', res.body);
+  expectStatus('cannot approve a rejected request', await call('PATCH', `/api/requests/${r2?.id}/approve`, { token: chen }), 409);
+  expectStatus('cannot mark rejected as borrowed', await call('PATCH', `/api/requests/${r2?.id}/borrowed`, { token: chen }), 409);
+
+  console.log('\nRequests: validation');
+  res = await call('POST', '/api/requests', { token: asha, body: { item_id: drill.id, start_date: isoDate(40), end_date: isoDate(41) } });
+  check('cannot borrow own item -> 403', res.status === 403, res.body);
+  expectStatus('start date in the past', await call('POST', '/api/requests', { token: ben, body: { item_id: drill.id, start_date: isoDate(-1), end_date: isoDate(2) } }), 400);
+  expectStatus('end before start', await call('POST', '/api/requests', { token: ben, body: { item_id: drill.id, start_date: isoDate(5), end_date: isoDate(4) } }), 400);
+  expectStatus('impossible date', await call('POST', '/api/requests', { token: ben, body: { item_id: drill.id, start_date: '2030-02-30', end_date: '2030-03-01' } }), 400);
+  expectStatus('bad date format', await call('POST', '/api/requests', { token: ben, body: { item_id: drill.id, start_date: '10/12/2030', end_date: '2030-12-11' } }), 400);
+  expectStatus('missing fields', await call('POST', '/api/requests', { token: ben, body: {} }), 400);
+  expectStatus('unknown item', await call('POST', '/api/requests', { token: ben, body: { item_id: 999999, start_date: isoDate(1), end_date: isoDate(2) } }), 404);
+
+  await call('PATCH', `/api/items/${calc.id}`, { token: chen, body: { availability_status: 'unavailable' } });
+  res = await call('POST', '/api/requests', { token: ben, body: { item_id: calc.id, start_date: isoDate(3), end_date: isoDate(4) } });
+  check('unavailable item -> 409 ITEM_UNAVAILABLE', res.status === 409 && res.body?.error?.code === 'ITEM_UNAVAILABLE', res.body);
+  await call('PATCH', `/api/items/${calc.id}`, { token: chen, body: { availability_status: 'available' } });
+
+  // Clean up the adjacent pending request so the drill is deletable again.
+  await call('PATCH', `/api/requests/${adjacent?.id}/reject`, { token: asha });
+  res = await call('GET', '/api/requests/mine', { token: ben });
+  check('no response leaks password_hash', !res.raw.includes('password_hash'));
+}
+
+const suites = { auth: authTests, items: itemTests, requests: requestTests };
 
 try {
   console.log(`Smoke testing ${BASE}`);
