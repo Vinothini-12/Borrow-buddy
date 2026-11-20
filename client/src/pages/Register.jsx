@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ErrorMessage } from '../components/Feedback.jsx'
+import PasswordInput from '../components/PasswordInput.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Register() {
@@ -49,7 +50,7 @@ export default function Register() {
         </label>
         <label className="field">
           <span>Password</span>
-          <input type="password" autoComplete="new-password" required minLength={8} maxLength={72} value={form.password} onChange={set('password')} />
+          <PasswordInput autoComplete="new-password" required minLength={8} maxLength={72} value={form.password} onChange={set('password')} />
           <small className="muted">At least 8 characters.</small>
         </label>
         <button type="submit" className="btn btn-block" disabled={submitting}>

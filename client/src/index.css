@@ -165,6 +165,15 @@ p { margin: 0 0 0.5rem; }
 }
 .field input[type='file'] { font: inherit; font-weight: 400; font-size: 0.875rem; }
 .field textarea { resize: vertical; }
+.password-input { position: relative; display: flex; }
+.password-input input { padding-right: 2.75rem !important; }
+.password-toggle {
+  position: absolute; right: 0.35rem; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: 2.1rem; height: 2.1rem; padding: 0;
+  border: none; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer;
+}
+.password-toggle:hover { color: var(--text); background: var(--surface-2); }
+.password-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 .upload-preview { max-height: 160px; border-radius: 8px; object-fit: cover; }
 .auth-page { display: grid; place-items: center; padding-top: 3rem; padding-bottom: 3rem; }
