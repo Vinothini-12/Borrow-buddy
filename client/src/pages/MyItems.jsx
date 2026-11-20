@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import AddItemForm from '../components/AddItemForm.jsx'
 import { EmptyState, ErrorMessage, Loading } from '../components/Feedback.jsx'
+import IncomingRequests from '../components/IncomingRequests.jsx'
 import { AvailabilityPill, ItemPhoto } from '../components/ItemCard.jsx'
 
-function MyItemRow({ item, onChanged, onDeleted }) {
+function MyItemRow({ item, requests, onChanged, onDeleted, onRequestUpdated }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -36,6 +37,8 @@ function MyItemRow({ item, onChanged, onDeleted }) {
     }
   }
 
+  const pending = requests.filter((r) => r.status === 'pending').length
+
   return (
     <article className="card my-item">
       <div className="my-item-main">
@@ -45,6 +48,7 @@ function MyItemRow({ item, onChanged, onDeleted }) {
           <div className="meta-row">
             <span className="category">{item.category}</span>
             <AvailabilityPill status={item.availability_status} />
+            {pending > 0 && <span className="badge badge-pending">{pending} pending</span>}
           </div>
         </div>
         <div className="my-item-actions">
@@ -57,12 +61,14 @@ function MyItemRow({ item, onChanged, onDeleted }) {
         </div>
       </div>
       <ErrorMessage error={error} />
+      <IncomingRequests requests={requests} onUpdated={onRequestUpdated} />
     </article>
   )
 }
 
 export default function MyItems() {
   const [items, setItems] = useState([])
+  const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -70,8 +76,9 @@ export default function MyItems() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api('/api/items/mine')
-      setItems(data.items)
+      const [mine, incoming] = await Promise.all([api('/api/items/mine'), api('/api/requests/incoming')])
+      setItems(mine.items)
+      setRequests(incoming.requests)
     } catch (err) {
       setError(err)
     } finally {
@@ -83,6 +90,7 @@ export default function MyItems() {
     load()
   }, [load])
 
+  const replaceRequest = (updated) => setRequests((list) => list.map((r) => (r.id === updated.id ? updated : r)))
   const replaceItem = (updated) => setItems((list) => list.map((i) => (i.id === updated.id ? { ...i, ...updated } : i)))
 
   return (
@@ -93,7 +101,7 @@ export default function MyItems() {
           <AddItemForm onCreated={(item) => setItems((list) => [{ ...item, pending_count: 0 }, ...list])} />
         </aside>
         <section>
-          <h2 className="section-title">Items you lend</h2>
+          <h2 className="section-title">Items you lend &amp; their requests</h2>
           {loading && <Loading label="Loading your items…" />}
           {!loading && error && <ErrorMessage error={error} onRetry={load} />}
           {!loading && !error && items.length === 0 && (
@@ -105,7 +113,9 @@ export default function MyItems() {
                 <MyItemRow
                   key={item.id}
                   item={item}
+                  requests={requests.filter((r) => r.item_id === item.id)}
                   onChanged={replaceItem}
+                  onRequestUpdated={replaceRequest}
                   onDeleted={(id) => setItems((list) => list.filter((i) => i.id !== id))}
                 />
               ))}
