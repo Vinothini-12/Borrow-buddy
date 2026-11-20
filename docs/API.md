@@ -1,0 +1,175 @@
+# BorrowBuddy — API reference
+
+Base URL (local): `http://localhost:5050`
+
+- Request and response bodies are JSON, except item create/update, which also accept `multipart/form-data`.
+- **Auth:** send `Authorization: Bearer <token>`, using the token from register or login. Tokens expire after 7 days.
+- Dates are `YYYY-MM-DD` strings. Timestamps are ISO-8601 UTC.
+- `password_hash` is never included in any response.
+
+## Error shape
+
+Every error uses the same shape:
+
+```json
+{ "error": { "code": "DATES_UNAVAILABLE", "message": "The item is already booked for some of those dates" } }
+```
+
+| Status | Codes | When |
+| --- | --- | --- |
+| 400 | `VALIDATION_ERROR`, `INVALID_JSON`, `INVALID_UPLOAD` | Bad or missing input, malformed JSON, wrong file type, or file over 2 MB |
+| 401 | `UNAUTHORIZED` | Missing, invalid or expired token; wrong email/password |
+| 403 | `FORBIDDEN` | Not the owner (or not a party to the request); trying to borrow your own item |
+| 404 | `NOT_FOUND` | Item, request or route does not exist |
+| 409 | `EMAIL_TAKEN`, `CONFLICT`, `ITEM_UNAVAILABLE`, `DATES_UNAVAILABLE`, `INVALID_TRANSITION`, `ITEM_HAS_ACTIVE_REQUESTS` | Business-rule conflicts (see each endpoint) |
+| 500 | `INTERNAL_ERROR` | Unexpected server error (details are logged on the server only) |
+
+## Objects
+
+**User**
+```json
+{ "id": 1, "name": "Asha Kumar", "email": "asha@example.com", "created_at": "2026-11-20T09:36:34.628Z" }
+```
+
+**Item**
+```json
+{
+  "id": 1, "owner_id": 1, "owner_name": "Asha Kumar",
+  "name": "Power Drill", "description": "Cordless 18V drill…", "category": "Tools",
+  "image_url": "/uploads/3f9c…a1.png", "availability_status": "available",
+  "created_at": "2026-11-20T09:36:34.628Z"
+}
+```
+`image_url` is relative to the API base URL, or `null`. `GET /api/items/mine` also adds `pending_count`.
+
+**Request**
+```json
+{
+  "id": 7, "item_id": 1, "borrower_id": 2,
+  "start_date": "2026-11-25", "end_date": "2026-11-27",
+  "status": "pending", "returned_at": null, "created_at": "2026-11-20T09:40:00.000Z",
+  "item_name": "Power Drill", "item_category": "Tools", "item_image_url": null,
+  "owner_id": 1, "owner_name": "Asha Kumar", "borrower_name": "Ben Carter"
+}
+```
+
+---
+
+## Auth
+
+### `POST /api/auth/register`
+- **Auth:** none
+- **Body:** `{ "name": string (1–100), "email": valid email, "password": string (8–72) }`. Email is trimmed and lower-cased.
+- **201:** `{ "token": string, "user": User }`
+- **Errors:** 400 validation · 409 `EMAIL_TAKEN`
+
+### `POST /api/auth/login`
+- **Auth:** none
+- **Body:** `{ "email": string, "password": string }`
+- **200:** `{ "token": string, "user": User }`
+- **Errors:** 400 validation · 401 `Incorrect email or password` (the same message whether the email or the password is wrong)
+
+### `GET /api/auth/me`
+- **Auth:** required
+- **200:** `{ "user": User }`
+- **Errors:** 401 missing/invalid token · 404 user no longer exists
+
+### Logout
+Logout is client-side: the client discards its token. There is no endpoint.
+
+---
+
+## Items
+
+### `GET /api/items?search=&category=`
+- **Auth:** none
+- **Query:** `search` (optional, ≤100 chars) is a case-insensitive *contains* match on name, with `%` and `_` treated literally. `category` is optional and must be one of the fixed categories.
+- Returns **only items with `availability_status = 'available'`**, newest first.
+- **200:** `{ "items": Item[] }`
+- **Errors:** 400 unknown category
+
+### `GET /api/items/mine`
+- **Auth:** required
+- All of the caller's items (available and unavailable), each with `pending_count`.
+- **200:** `{ "items": (Item & { pending_count: number })[] }`
+
+### `GET /api/items/:id`
+- **Auth:** none
+- Returns the item whatever its availability, so links and owner views still work.
+- **200:** `{ "item": Item }`
+- **Errors:** 400 non-numeric id · 404 not found
+
+### `POST /api/items`
+- **Auth:** required
+- **Body:** `multipart/form-data`, or JSON if there's no photo
+  - `name` (required, 1–120)
+  - `description` (optional, ≤2000)
+  - `category` (required, one of the fixed categories)
+  - `availability_status` (optional, `available` (default) | `unavailable`)
+  - `image` (optional file: jpg/png/webp, ≤2 MB; the content is checked as well as the declared type)
+- **201:** `{ "item": Item }`
+- **Errors:** 400 validation / `INVALID_UPLOAD` · 401
+
+### `PATCH /api/items/:id`
+- **Auth:** required, **owner only**
+- **Body:** any subset of `name`, `description`, `category`, `availability_status`, plus optional `image` (multipart). A new image replaces and deletes the old file.
+- **200:** `{ "item": Item }`
+- **Errors:** 400 validation / nothing to update · 401 · 403 not owner · 404
+
+### `DELETE /api/items/:id`
+- **Auth:** required, **owner only**
+- Blocked while the item has any `pending`, `approved` or `borrowed` request. Finished requests are deleted with the item.
+- **204:** no body
+- **Errors:** 401 · 403 not owner · 404 · 409 `ITEM_HAS_ACTIVE_REQUESTS`
+
+---
+
+## Requests
+
+All request endpoints require auth.
+
+### `POST /api/requests`
+- **Body:** `{ "item_id": number, "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD" }`
+- **Rules:**
+  - `start_date` is today or later (server date)
+  - `end_date >= start_date`
+  - the date must be a real calendar date
+  - the item exists and is `available`
+  - the caller is not the owner
+  - no **approved or borrowed** request on the item overlaps the range (inclusive). Pending requests don't block.
+  - The check and the insert run in one transaction with the item row locked.
+- **201:** `{ "request": Request }` (status `pending`)
+- **Errors:** 400 validation/past date · 403 own item · 404 item not found · 409 `ITEM_UNAVAILABLE` · 409 `DATES_UNAVAILABLE`
+
+### `GET /api/requests/mine`
+- Requests the caller made, newest first.
+- **200:** `{ "requests": Request[] }`
+
+### `GET /api/requests/incoming`
+- Requests for items the caller owns, ordered by start date.
+- **200:** `{ "requests": Request[] }`
+
+### `GET /api/requests/:id`
+- Only the **borrower** or the **item owner** may view.
+- **200:** `{ "request": Request }`
+- **Errors:** 400 bad id · 403 not a party · 404
+
+### Status changes (owner only)
+
+| Endpoint | Allowed from → to | Extra |
+| --- | --- | --- |
+| `PATCH /api/requests/:id/approve` | `pending → approved` | Re-checks overlap against other approved/borrowed requests in a locked transaction. Returns 409 `DATES_UNAVAILABLE` on conflict |
+| `PATCH /api/requests/:id/reject` | `pending → rejected` | |
+| `PATCH /api/requests/:id/borrowed` | `approved → borrowed` | The handover happened |
+| `PATCH /api/requests/:id/returned` | `borrowed → returned` | Sets `returned_at = NOW()` |
+
+- **Body:** none
+- **200:** `{ "request": Request }` with the new status
+- **Errors:** 400 bad id · 401 · 403 not the item owner (including the borrower) · 404 · 409 `INVALID_TRANSITION` (for example approving twice, or marking a pending request returned) · 409 `DATES_UNAVAILABLE` (approve only)
+
+---
+
+## Other
+
+- `GET /api/health` → `{ "ok": true }`
+- `GET /uploads/<file>` serves uploaded item photos.
