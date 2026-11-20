@@ -14,7 +14,7 @@ function required(name) {
 export const config = {
   databaseUrl: required('DATABASE_URL'),
   jwtSecret: required('JWT_SECRET'),
-  port: Number(process.env.PORT) || 4000,
+  port: Number(process.env.PORT) || 5050,
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   dbSsl: process.env.DB_SSL === 'true',
 };
