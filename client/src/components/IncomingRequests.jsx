@@ -54,14 +54,14 @@ function RequestRow({ request, onUpdated }) {
           </div>
         )}
       </div>
-      {error && <div style={{ marginTop: '0.4rem' }}><ErrorMessage error={error} /></div>}
+      {error && <div className="request-row-error"><ErrorMessage error={error} /></div>}
     </div>
   )
 }
 
 export default function IncomingRequests({ requests, onUpdated }) {
   if (requests.length === 0) {
-    return <p className="muted small" style={{ margin: 0 }}>No requests yet.</p>
+    return <p className="muted small request-list-note">No requests yet.</p>
   }
   const active = requests.filter((r) => ACTIVE.includes(r.status))
   const past = requests.filter((r) => !ACTIVE.includes(r.status))
@@ -69,12 +69,12 @@ export default function IncomingRequests({ requests, onUpdated }) {
   return (
     <div className="request-list">
       <p className="request-list-title">Requests</p>
-      {active.length === 0 && <p className="muted small" style={{ margin: 0 }}>No open requests.</p>}
+      {active.length === 0 && <p className="muted small request-list-note">No open requests.</p>}
       {active.map((r) => <RequestRow key={r.id} request={r} onUpdated={onUpdated} />)}
       {past.length > 0 && (
         <details>
           <summary className="muted small">Past requests ({past.length})</summary>
-          <div className="stack" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
+          <div className="stack past-requests">
             {past.map((r) => <RequestRow key={r.id} request={r} onUpdated={onUpdated} />)}
           </div>
         </details>

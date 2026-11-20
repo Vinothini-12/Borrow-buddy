@@ -97,7 +97,7 @@ export default function MyItems() {
     <div className="container section">
       <h1>My Items</h1>
       <div className="two-col">
-        <aside>
+        <aside className="add-item-panel">
           <AddItemForm onCreated={(item) => setItems((list) => [{ ...item, pending_count: 0 }, ...list])} />
         </aside>
         <section>
@@ -105,7 +105,7 @@ export default function MyItems() {
           {loading && <Loading label="Loading your items…" />}
           {!loading && error && <ErrorMessage error={error} onRetry={load} />}
           {!loading && !error && items.length === 0 && (
-            <EmptyState title="You haven't listed anything yet">Use the form to lend your first item.</EmptyState>
+            <EmptyState title="You haven't listed anything yet">Use the "Lend an item" form to list your first item.</EmptyState>
           )}
           {!loading && !error && (
             <div className="stack">

@@ -77,10 +77,10 @@ export default function MyRequests() {
                       <Link to={`/items/${r.item_id}`} className="my-item-title">{r.item_name}</Link>
                       <StatusBadge status={r.status} />
                     </div>
-                    <p className="small" style={{ margin: '0.2rem 0' }}>
+                    <p className="small request-card-line">
                       {formatRange(r.start_date, r.end_date)} · from {r.owner_name}
                     </p>
-                    <p className="muted small" style={{ margin: 0 }}>
+                    <p className="muted small request-card-line">
                       {r.status === 'returned'
                         ? `Returned ${formatDateTime(r.returned_at)}.`
                         : HINTS[r.status]}{' '}
