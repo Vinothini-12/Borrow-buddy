@@ -84,7 +84,104 @@ async function authTests() {
   expectStatus('me with bad token', await call('GET', '/api/auth/me', { token: 'abc' }), 401);
 }
 
-const suites = { auth: authTests };
+// ---------------------------------------------------------------- items
+// Smallest valid PNG (1x1 transparent pixel).
+const PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+function itemForm(fields, file) {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  if (file) form.append('image', new Blob([file.data], { type: file.type }), file.name);
+  return form;
+}
+
+async function itemTests() {
+  console.log('\nItems');
+  const asha = await login('asha@example.com');
+  const ben = await login('ben@example.com');
+
+  let res = await call('GET', '/api/items');
+  expectStatus('public list', res, 200);
+  check('seeded items are listed with owner_name', res.body?.items?.length >= 4 && res.body.items.every((i) => i.owner_name), res.body);
+
+  res = await call('GET', '/api/items?search=dri');
+  check('search "dri" finds Power Drill', res.body?.items?.some((i) => i.name === 'Power Drill') && res.body.items.every((i) => /dri/i.test(i.name)), res.body);
+
+  res = await call('GET', '/api/items?category=Sports');
+  check('category filter Sports', res.body?.items?.length >= 1 && res.body.items.every((i) => i.category === 'Sports'), res.body);
+
+  res = await call('GET', '/api/items?search=%25');
+  check('search "%" is literal, not wildcard', res.status === 200 && res.body.items.length === 0, res.body);
+
+  expectStatus('unknown category', await call('GET', '/api/items?category=Cars'), 400);
+
+  res = await call('POST', '/api/items', { form: itemForm({ name: 'X', category: 'Tools' }) });
+  expectStatus('create without auth', res, 401);
+
+  res = await call('POST', '/api/items', {
+    token: asha,
+    form: itemForm(
+      { name: 'Smoke Ladder', description: 'Tall ladder', category: 'Tools' },
+      { data: PNG_1PX, type: 'image/png', name: 'ladder.png' },
+    ),
+  });
+  expectStatus('create item with photo', res, 201);
+  const ladder = res.body?.item;
+  check('image_url saved under /uploads', ladder?.image_url?.startsWith('/uploads/') && ladder.availability_status === 'available', ladder);
+
+  if (ladder?.image_url) {
+    const img = await fetch(BASE + ladder.image_url);
+    check('uploaded image is served', img.status === 200 && img.headers.get('content-type') === 'image/png');
+  }
+
+  res = await call('GET', '/api/items?search=smoke ladder');
+  check('new item found by search', res.body?.items?.some((i) => i.id === ladder?.id), res.body);
+
+  res = await call('POST', '/api/items', {
+    token: asha,
+    form: itemForm({ name: 'Bad', category: 'Tools' }, { data: Buffer.from('hello'), type: 'text/plain', name: 'a.txt' }),
+  });
+  expectStatus('reject non-image upload', res, 400);
+
+  res = await call('POST', '/api/items', {
+    token: asha,
+    form: itemForm({ name: 'Fake', category: 'Tools' }, { data: Buffer.from('not really a png'), type: 'image/png', name: 'a.png' }),
+  });
+  expectStatus('reject file whose bytes are not an image', res, 400);
+
+  res = await call('POST', '/api/items', {
+    token: asha,
+    form: itemForm({ name: 'Huge', category: 'Tools' }, { data: Buffer.concat([PNG_1PX, Buffer.alloc(2 * 1024 * 1024)]), type: 'image/png', name: 'big.png' }),
+  });
+  expectStatus('reject image over 2 MB', res, 400);
+
+  res = await call('POST', '/api/items', { token: asha, form: itemForm({ name: '', category: 'Nope' }) });
+  expectStatus('reject invalid item fields', res, 400);
+
+  res = await call('PATCH', `/api/items/${ladder?.id}`, { token: ben, body: { name: 'Stolen' } });
+  expectStatus('non-owner cannot edit', res, 403);
+
+  res = await call('PATCH', `/api/items/${ladder?.id}`, { token: asha, body: { availability_status: 'unavailable' } });
+  check('owner marks item unavailable', res.status === 200 && res.body.item.availability_status === 'unavailable', res.body);
+
+  res = await call('GET', '/api/items');
+  check('unavailable item hidden from browse', !res.body.items.some((i) => i.id === ladder?.id));
+
+  res = await call('GET', '/api/items/mine', { token: asha });
+  check('mine includes unavailable item', res.body?.items?.some((i) => i.id === ladder?.id && i.pending_count === 0), res.body);
+
+  expectStatus('get missing item', await call('GET', '/api/items/999999'), 404);
+  expectStatus('get bad id', await call('GET', '/api/items/abc'), 400);
+
+  expectStatus('non-owner cannot delete', await call('DELETE', `/api/items/${ladder?.id}`, { token: ben }), 403);
+  expectStatus('owner deletes item', await call('DELETE', `/api/items/${ladder?.id}`, { token: asha }), 204);
+  expectStatus('deleted item is gone', await call('GET', `/api/items/${ladder?.id}`), 404);
+}
+
+const suites = { auth: authTests, items: itemTests };
 
 try {
   console.log(`Smoke testing ${BASE}`);
