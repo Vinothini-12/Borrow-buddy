@@ -37,10 +37,10 @@ Every error uses the same shape:
   "id": 1, "owner_id": 1, "owner_name": "Asha Kumar",
   "name": "Power Drill", "description": "Cordless 18V drill…", "category": "Tools",
   "image_url": "/uploads/3f9c…a1.png", "availability_status": "available",
-  "created_at": "2026-11-20T09:36:34.628Z"
+  "created_at": "2026-11-20T09:36:34.628Z", "has_location": true
 }
 ```
-`image_url` is relative to the API base URL, or `null`. `GET /api/items/mine` also adds `pending_count`.
+`image_url` is relative to the API base URL, or `null`. `GET /api/items/mine` also adds `pending_count`. Exact coordinates are never returned: only `has_location`, plus `distance_km` in a near-me search.
 
 **Request**
 ```json
@@ -81,12 +81,13 @@ Logout is client-side: the client discards its token. There is no endpoint.
 
 ## Items
 
-### `GET /api/items?search=&category=`
+### `GET /api/items?search=&category=&lat=&lng=&radius=`
 - **Auth:** none
 - **Query:** `search` (optional, ≤100 chars) is a case-insensitive *contains* match on name, with `%` and `_` treated literally. `category` is optional and must be one of the fixed categories.
+- **Near me (optional):** `lat` + `lng` (the searcher's position, both required together) and `radius` in km (default 5, max 100). Only items with a location within the radius are returned, **nearest first**, each with `distance_km` (1 decimal; approximate because stored locations are rounded to ~1 km).
 - Returns **only items with `availability_status = 'available'`**, newest first.
 - **200:** `{ "items": Item[] }`
-- **Errors:** 400 unknown category
+- **Errors:** 400 unknown category · bad / unpaired `lat`/`lng` · radius out of range
 
 ### `GET /api/items/mine`
 - **Auth:** required
@@ -107,12 +108,13 @@ Logout is client-side: the client discards its token. There is no endpoint.
   - `category` (required, one of the fixed categories)
   - `availability_status` (optional, `available` (default) | `unavailable`)
   - `image` (optional file: jpg/png/webp, ≤2 MB; the content is checked as well as the declared type)
+  - `latitude` + `longitude` (optional, together). Rounded to 2 decimals (~1 km) before saving
 - **201:** `{ "item": Item }`
 - **Errors:** 400 validation / `INVALID_UPLOAD` · 401
 
 ### `PATCH /api/items/:id`
 - **Auth:** required, **owner only**
-- **Body:** any subset of `name`, `description`, `category`, `availability_status`, plus optional `image` (multipart). A new image replaces and deletes the old file.
+- **Body:** any subset of `name`, `description`, `category`, `availability_status`, `latitude` + `longitude` (together; `null` or `""` clears the location), plus optional `image` (multipart). A new image replaces and deletes the old file.
 - **200:** `{ "item": Item }`
 - **Errors:** 400 validation / nothing to update · 401 · 403 not owner · 404
 

@@ -30,6 +30,7 @@
 | `image_url` | `TEXT` | Nullable. Relative path such as `/uploads/<hex>.png` |
 | `availability_status` | `VARCHAR(20)` | Default `'available'`. `CHECK IN ('available','unavailable')` |
 | `created_at` | `TIMESTAMPTZ` | Default `NOW()` |
+| `latitude`, `longitude` | `DOUBLE PRECISION` | Nullable (migration `002`). Approximate: the API rounds to 2 decimals (~1 km). Near-me distance uses the haversine formula in plain SQL (no PostGIS) |
 
 ### `borrow_requests`
 
@@ -50,6 +51,7 @@
 | --- | --- |
 | `users.email` UNIQUE | One account per email |
 | `items.availability_status` CHECK | `IN ('available','unavailable')` |
+| `items_location_check` | `latitude`/`longitude` both set or both null, within ±90 / ±180 |
 | `borrow_requests_dates_check` | `end_date >= start_date` |
 | `borrow_requests_status_check` | `status IN ('pending','approved','borrowed','returned','rejected')` |
 

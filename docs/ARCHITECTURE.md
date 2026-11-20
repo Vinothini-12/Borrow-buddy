@@ -21,7 +21,7 @@ borrowbuddy/
 ├── docs/                       # SCOPE, ARCHITECTURE, API, DATABASE, TESTING
 ├── server/
 │   ├── Dockerfile  .dockerignore  .env.example
-│   ├── migrations/001_init.sql # schema
+│   ├── migrations/             # 001_init.sql schema, 002_item_location.sql
 │   ├── seeds/seed.sql          # 4 demo users, 4 demo items
 │   ├── scripts/
 │   │   ├── dbTarget.js         # parses DATABASE_URL, refuses any db not named "borrowbuddy"
@@ -43,7 +43,8 @@ borrowbuddy/
         ├── components/         # Navbar, ProtectedRoute, ItemCard, StatusBadge, AddItemForm,
         │                       # IncomingRequests, Feedback (Loading/ErrorMessage/EmptyState)
         ├── pages/              # Home, ItemDetail, Login, Register, MyItems, MyRequests
-        └── utils/format.js     # date formatting helpers
+        ├── hooks/usePendingCount.js  # navbar badge polling
+        └── utils/              # format.js (dates), geo.js (browser location, distance text)
 ```
 
 ## Request flow
@@ -113,6 +114,8 @@ erDiagram
         varchar category
         text image_url
         varchar availability_status "available | unavailable"
+        float latitude "nullable, ~1 km"
+        float longitude "nullable, ~1 km"
         timestamptz created_at
     }
     borrow_requests {

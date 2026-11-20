@@ -5,6 +5,7 @@ import AddItemForm from '../components/AddItemForm.jsx'
 import { EmptyState, ErrorMessage, Loading } from '../components/Feedback.jsx'
 import IncomingRequests from '../components/IncomingRequests.jsx'
 import { AvailabilityPill, ItemPhoto } from '../components/ItemCard.jsx'
+import { getPosition } from '../utils/geo.js'
 
 function MyItemRow({ item, requests, onChanged, onDeleted, onRequestUpdated }) {
   const [busy, setBusy] = useState(false)
@@ -16,6 +17,20 @@ function MyItemRow({ item, requests, onChanged, onDeleted, onRequestUpdated }) {
     const next = item.availability_status === 'available' ? 'unavailable' : 'available'
     try {
       const data = await api(`/api/items/${item.id}`, { method: 'PATCH', body: { availability_status: next } })
+      onChanged(data.item)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function setLocation() {
+    setBusy(true)
+    setError(null)
+    try {
+      const { lat, lng } = await getPosition()
+      const data = await api(`/api/items/${item.id}`, { method: 'PATCH', body: { latitude: lat, longitude: lng } })
       onChanged(data.item)
     } catch (err) {
       setError(err)
@@ -49,9 +64,14 @@ function MyItemRow({ item, requests, onChanged, onDeleted, onRequestUpdated }) {
             <span className="category">{item.category}</span>
             <AvailabilityPill status={item.availability_status} />
             {pending > 0 && <span className="badge badge-pending">{pending} pending</span>}
+            {!item.has_location && <span className="muted small">No location: won't show in "Near me"</span>}
           </div>
         </div>
         <div className="my-item-actions">
+          <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={setLocation}
+            title="Uses your current location, rounded to about 1 km">
+            📍 {item.has_location ? 'Update location' : 'Add location'}
+          </button>
           <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={toggleAvailability}>
             Mark {item.availability_status === 'available' ? 'unavailable' : 'available'}
           </button>

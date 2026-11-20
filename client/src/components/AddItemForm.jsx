@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api.js'
 import { CATEGORIES, IMAGE_TYPES, MAX_IMAGE_BYTES } from '../constants.js'
+import { getPosition } from '../utils/geo.js'
 import { ErrorMessage } from './Feedback.jsx'
 
 const EMPTY = { name: '', description: '', category: '', availability_status: 'available' }
@@ -10,7 +11,21 @@ export default function AddItemForm({ onCreated }) {
   const [file, setFile] = useState(null)
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [location, setLocation] = useState(null)
+  const [locating, setLocating] = useState(false)
   const fileInput = useRef(null)
+
+  async function addMyLocation() {
+    setError(null)
+    setLocating(true)
+    try {
+      setLocation(await getPosition())
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLocating(false)
+    }
+  }
 
   const preview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
   useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview])
@@ -40,10 +55,15 @@ export default function AddItemForm({ onCreated }) {
     const data = new FormData()
     Object.entries(form).forEach(([k, v]) => data.append(k, v))
     if (file) data.append('image', file)
+    if (location) {
+      data.append('latitude', location.lat)
+      data.append('longitude', location.lng)
+    }
     try {
       const { item } = await api('/api/items', { method: 'POST', form: data })
       setForm(EMPTY)
       setFile(null)
+      setLocation(null)
       if (fileInput.current) fileInput.current.value = ''
       onCreated(item)
     } catch (err) {
@@ -86,6 +106,19 @@ export default function AddItemForm({ onCreated }) {
         <input ref={fileInput} type="file" accept={IMAGE_TYPES.join(',')} onChange={handleFile} />
       </label>
       {preview && <img className="upload-preview" src={preview} alt="Selected photo preview" />}
+      <div className="field">
+        <span>Location <small className="muted">(optional, so neighbours nearby can find it)</small></span>
+        {location ? (
+          <div className="location-set">
+            <span>📍 Location added <small className="muted">(approximate, ~1 km; never your exact address)</small></span>
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => setLocation(null)}>Remove</button>
+          </div>
+        ) : (
+          <button type="button" className="btn btn-small btn-ghost" onClick={addMyLocation} disabled={locating}>
+            {locating ? 'Finding location…' : '📍 Use my location'}
+          </button>
+        )}
+      </div>
       <button type="submit" className="btn btn-block" disabled={submitting}>
         {submitting ? 'Listing…' : 'List item'}
       </button>

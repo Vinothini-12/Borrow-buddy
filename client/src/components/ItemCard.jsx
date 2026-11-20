@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { imageSrc } from '../api.js'
+import { formatDistance } from '../utils/geo.js'
 
 export function ItemPhoto({ item, className = '', lazy = true }) {
   const src = imageSrc(item.image_url)
@@ -30,6 +31,7 @@ export default function ItemCard({ item }) {
         </div>
         <h3 className="item-card-title">{item.name}</h3>
         <p className="muted small">Lent by {item.owner_name}</p>
+        {item.distance_km != null && <p className="distance small">📍 {formatDistance(item.distance_km)}</p>}
       </div>
     </Link>
   )

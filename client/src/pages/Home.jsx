@@ -4,11 +4,16 @@ import { api } from '../api.js'
 import { EmptyState, ErrorMessage, Loading } from '../components/Feedback.jsx'
 import ItemCard from '../components/ItemCard.jsx'
 import { CATEGORIES } from '../constants.js'
+import { getPosition, RADIUS_OPTIONS } from '../utils/geo.js'
 
 export default function Home() {
   const [params, setParams] = useSearchParams()
   const search = params.get('search') || ''
   const category = params.get('category') || ''
+  const near = params.get('near') || '' // radius in km, e.g. "2"
+  const [position, setPosition] = useState(null)
+  const [geoError, setGeoError] = useState(null)
+  const locating = Boolean(near) && !position
   const [draft, setDraft] = useState(search)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -38,11 +43,31 @@ export default function Home() {
     return () => clearTimeout(t)
   }, [draft, search, updateParam])
 
+  // "Near me" needs the browser's location once; if it fails, drop back to "Anywhere".
   useEffect(() => {
+    if (!near || position) return undefined
+    let cancelled = false
+    getPosition()
+      .then((pos) => !cancelled && setPosition(pos))
+      .catch((err) => {
+        if (cancelled) return
+        setGeoError(err.message)
+        updateParam('near', '')
+      })
+    return () => { cancelled = true }
+  }, [near, position, updateParam])
+
+  useEffect(() => {
+    if (near && !position) return undefined // wait for location
     const controller = new AbortController()
     const qs = new URLSearchParams()
     if (search) qs.set('search', search)
     if (category) qs.set('category', category)
+    if (near) {
+      qs.set('lat', position.lat)
+      qs.set('lng', position.lng)
+      qs.set('radius', near)
+    }
     setLoading(true)
     setError(null)
     api(`/api/items?${qs}`, { signal: controller.signal })
@@ -50,9 +75,10 @@ export default function Home() {
       .catch((err) => err.name !== 'AbortError' && setError(err))
       .finally(() => !controller.signal.aborted && setLoading(false))
     return () => controller.abort()
-  }, [search, category, reloadKey])
+  }, [search, category, near, position, reloadKey])
 
-  const filtered = search || category
+  const filtered = search || category || near
+  const busy = loading || locating
 
   return (
     <>
@@ -74,21 +100,27 @@ export default function Home() {
               <option value="">All categories</option>
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
+            <label htmlFor="near" className="sr-only">Distance</label>
+            <select id="near" value={near} onChange={(e) => { setGeoError(null); updateParam('near', e.target.value) }}>
+              <option value="">Anywhere</option>
+              {RADIUS_OPTIONS.map((km) => <option key={km} value={km}>Within {km} km</option>)}
+            </select>
             <button type="submit" className="btn">Search</button>
           </form>
+          {geoError && <div className="geo-error"><ErrorMessage error={geoError} /></div>}
         </div>
       </section>
 
       <section className="container section">
         <div className="section-head">
           <h2>{filtered ? 'Search results' : 'Available to borrow'}</h2>
-          {!loading && !error && <span className="muted small">{items.length} item{items.length === 1 ? '' : 's'}</span>}
+          {!busy && !error && <span className="muted small">{items.length} item{items.length === 1 ? '' : 's'}</span>}
         </div>
 
-        {loading && <Loading label="Finding items…" />}
-        {!loading && error && <ErrorMessage error={error} onRetry={() => setReloadKey((k) => k + 1)} />}
-        {!loading && !error && items.length === 0 && (
-          <EmptyState title={filtered ? 'No items match your search' : 'Nothing listed yet'}>
+        {busy && <Loading label={locating ? 'Finding your location…' : 'Finding items…'} />}
+        {!busy && error && <ErrorMessage error={error} onRetry={() => setReloadKey((k) => k + 1)} />}
+        {!busy && !error && items.length === 0 && (
+          <EmptyState title={near && !search && !category ? `Nothing listed within ${near} km yet` : filtered ? 'No items match your search' : 'Nothing listed yet'}>
             {filtered ? (
               <button type="button" className="btn btn-ghost" onClick={() => { setDraft(''); setParams({}, { replace: true }) }}>
                 Clear filters
@@ -98,7 +130,7 @@ export default function Home() {
             )}
           </EmptyState>
         )}
-        {!loading && !error && items.length > 0 && (
+        {!busy && !error && items.length > 0 && (
           <div className="grid">
             {items.map((item) => <ItemCard key={item.id} item={item} />)}
           </div>

@@ -257,3 +257,8 @@ details summary { cursor: pointer; }
   .field-row { grid-template-columns: 1fr; }
   .item-card .item-photo { aspect-ratio: 16 / 9; }
 }
+
+/* ---------- location ---------- */
+.distance { color: var(--brand); font-weight: 600; margin: 0.25rem 0 0; }
+.location-set { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+.geo-error { max-width: 720px; margin-top: 0.75rem; }

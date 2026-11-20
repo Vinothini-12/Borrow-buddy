@@ -7,12 +7,13 @@ INSERT INTO users (name, email, password_hash) VALUES
   ('Chen Li',     'chen@example.com',  '$2b$10$Ul8elGbK.o4o9z0T4Z57d.QoKIJWSxAQM.ErT4IZW.qrezYbu3dcy'),
   ('Divya Rao',   'divya@example.com', '$2b$10$Ul8elGbK.o4o9z0T4Z57d.QoKIJWSxAQM.ErT4IZW.qrezYbu3dcy');
 
-INSERT INTO items (owner_id, name, description, category, image_url, availability_status) VALUES
+-- Approximate (~1 km) demo locations around Chennai, for the "Near me" filter.
+INSERT INTO items (owner_id, name, description, category, image_url, availability_status, latitude, longitude) VALUES
   ((SELECT id FROM users WHERE email = 'asha@example.com'),  'Power Drill',
-   'Cordless 18V drill with two batteries and a bit set.', 'Tools', NULL, 'available'),
+   'Cordless 18V drill with two batteries and a bit set.', 'Tools', NULL, 'available', 13.04, 80.23),
   ((SELECT id FROM users WHERE email = 'ben@example.com'),   'Bicycle',
-   'Hybrid city bike, medium frame, includes helmet and lock.', 'Sports', NULL, 'available'),
+   'Hybrid city bike, medium frame, includes helmet and lock.', 'Sports', NULL, 'available', 13.05, 80.24),
   ((SELECT id FROM users WHERE email = 'chen@example.com'),  'Calculator',
-   'Scientific graphing calculator, great for exams.', 'Study', NULL, 'available'),
+   'Scientific graphing calculator, great for exams.', 'Study', NULL, 'available', 13.01, 80.22),
   ((SELECT id FROM users WHERE email = 'divya@example.com'), 'Camping Kit',
-   '2-person tent, two sleeping bags and a camp stove.', 'Outdoor', NULL, 'available');
+   '2-person tent, two sleeping bags and a camp stove.', 'Outdoor', NULL, 'available', 13.08, 80.27);

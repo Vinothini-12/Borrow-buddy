@@ -118,6 +118,18 @@ async function itemTests() {
 
   expectStatus('unknown category', await call('GET', '/api/items?category=Cars'), 400);
 
+  // Location: seeds put Drill (13.04,80.23), Bicycle (13.05,80.24), Calculator (13.01,80.22), Camping Kit (13.08,80.27).
+  res = await call('GET', '/api/items?lat=13.04&lng=80.23&radius=2');
+  const near = res.body?.items?.map((i) => i.name) ?? [];
+  check('near me 2 km: drill + bicycle only', res.status === 200 && near.includes('Power Drill') && near.includes('Bicycle') && !near.includes('Camping Kit') && !near.includes('Calculator'), res.body);
+  check('near me sorted nearest first with distance_km', res.body?.items?.[0]?.name === 'Power Drill' && res.body.items[0].distance_km === 0 && res.body.items[1].distance_km > 0, res.body);
+  check('exact coordinates never returned', res.body?.items?.every((i) => !('latitude' in i) && !('longitude' in i) && i.has_location === true), res.body);
+  res = await call('GET', '/api/items?lat=13.04&lng=80.23&radius=10');
+  check('near me 10 km includes all four', ['Power Drill', 'Bicycle', 'Calculator', 'Camping Kit'].every((n) => res.body?.items?.some((i) => i.name === n)), res.body);
+  expectStatus('lat without lng', await call('GET', '/api/items?lat=13.04'), 400);
+  expectStatus('latitude out of range', await call('GET', '/api/items?lat=95&lng=80'), 400);
+  expectStatus('radius over 100 km', await call('GET', '/api/items?lat=13&lng=80&radius=500'), 400);
+
   res = await call('POST', '/api/items', { form: itemForm({ name: 'X', category: 'Tools' }) });
   expectStatus('create without auth', res, 401);
 
@@ -136,6 +148,24 @@ async function itemTests() {
     const img = await fetch(BASE + ladder.image_url);
     check('uploaded image is served', img.status === 200 && img.headers.get('content-type') === 'image/png');
   }
+
+  check('item without location has has_location=false', ladder?.has_location === false, ladder);
+
+  res = await call('POST', '/api/items', {
+    token: asha,
+    form: itemForm({ name: 'Smoke Located', category: 'Tools', latitude: '13.04123', longitude: '80.23456' }),
+  });
+  expectStatus('create item with location', res, 201);
+  const located = res.body?.item;
+  res = await call('GET', '/api/items?lat=13.04&lng=80.23&radius=1&search=smoke located');
+  check('located item found nearby, rounded to ~1 km', res.body?.items?.[0]?.id === located?.id && res.body.items[0].distance_km === 0, res.body);
+  expectStatus('latitude without longitude', await call('POST', '/api/items', { token: asha, form: itemForm({ name: 'Bad', category: 'Tools', latitude: '13' }) }), 400);
+  expectStatus('longitude not a number', await call('PATCH', `/api/items/${located?.id}`, { token: asha, body: { latitude: 13, longitude: 'abc' } }), 400);
+  res = await call('PATCH', `/api/items/${located?.id}`, { token: asha, body: { latitude: null, longitude: null } });
+  check('owner can clear location', res.status === 200 && res.body.item.has_location === false, res.body);
+  res = await call('PATCH', `/api/items/${located?.id}`, { token: asha, body: { latitude: 13.08, longitude: 80.27 } });
+  check('owner can set location later', res.status === 200 && res.body.item.has_location === true, res.body);
+  await call('DELETE', `/api/items/${located?.id}`, { token: asha });
 
   res = await call('GET', '/api/items?search=smoke ladder');
   check('new item found by search', res.body?.items?.some((i) => i.id === ladder?.id), res.body);

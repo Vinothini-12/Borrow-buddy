@@ -23,6 +23,8 @@ Success for v1 is a working two-day prototype that demonstrates this flow end to
 5. **Owner decision**: the owner approves or rejects pending requests, and the borrower sees the result.
 6. **Status tracking**: `pending → approved → borrowed → returned`, or `pending → rejected`.
 7. **Handover and return**: the owner marks a request as borrowed (handover happened) and then returned.
+8. **Near me** (added after v1): owners can attach an approximate location (browser location, rounded to ~1 km) to an item, and borrowers can filter by distance (1–25 km), nearest first.
+9. **New-request badge** (added after v1): the navbar shows how many requests are waiting on My Items, refreshed every 30 s while the app is open.
 
 ## Decision: borrowing is free
 
@@ -34,7 +36,7 @@ Borrowing is **free in v1**. There is no lending fee field, no payment flow and 
 - In-app chat or messaging
 - Ratings and reviews
 - Email / SMS / push notifications
-- Maps, distance and geolocation
+- Map view, typed addresses / geocoding, exact locations
 - Admin panel or moderation tools
 - Social login (Google, Facebook, …)
 - Multiple photos per item
@@ -63,7 +65,7 @@ Borrowing is **free in v1**. There is no lending fee field, no payment flow and 
 | Ratings and reviews | Rate the borrower/lender after `returned` to build trust. |
 | Notifications | Email/push on new request, decision, upcoming return date and overdue items. |
 | In-app chat | Per-request thread to arrange the handover without sharing phone numbers. |
-| Location search | Item/user location, "near me" search, map view. |
+| Location extras | Map view (Leaflet + OpenStreetMap), typed area/pincode via geocoding. Basic "near me" is built. |
 | Availability calendar | Show booked ranges on the item page so borrowers can pick free dates up front. |
 | Auto-reject overlaps | When one request is approved, auto-reject other pending requests that overlap it. |
 | Multiple photos | Gallery per item. |
