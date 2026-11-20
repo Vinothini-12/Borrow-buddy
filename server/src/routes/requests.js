@@ -95,6 +95,17 @@ router.get('/mine', async (req, res) => {
   res.json({ requests: rows });
 });
 
+// GET /api/requests/incoming/count  (lightweight: pending requests waiting on me, for the navbar badge)
+router.get('/incoming/count', async (req, res) => {
+  const { rows } = await query(
+    `SELECT COUNT(*)::int AS pending
+     FROM borrow_requests r JOIN items i ON i.id = r.item_id
+     WHERE i.owner_id = $1 AND r.status = 'pending'`,
+    [req.user.id],
+  );
+  res.json({ pending: rows[0].pending });
+});
+
 // GET /api/requests/incoming  (requests for items I own)
 router.get('/incoming', async (req, res) => {
   const { rows } = await query(

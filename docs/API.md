@@ -149,6 +149,10 @@ All request endpoints require auth.
 - Requests for items the caller owns, ordered by start date.
 - **200:** `{ "requests": Request[] }`
 
+### `GET /api/requests/incoming/count`
+- Number of **pending** requests on items the caller owns. Polled by the navbar badge.
+- **200:** `{ "pending": 2 }`
+
 ### `GET /api/requests/:id`
 - Only the **borrower** or the **item owner** may view.
 - **200:** `{ "request": Request }`

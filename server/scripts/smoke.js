@@ -211,6 +211,11 @@ async function requestTests() {
   check('A sees it in /incoming', res.body?.requests?.some((r) => r.id === r1?.id), res.body);
   res = await call('GET', '/api/requests/incoming', { token: ben });
   check('B does not see it in their /incoming', !res.body?.requests?.some((r) => r.id === r1?.id), res.body);
+  res = await call('GET', '/api/requests/incoming/count', { token: asha });
+  check('A pending count is 1', res.status === 200 && res.body?.pending === 1, res.body);
+  res = await call('GET', '/api/requests/incoming/count', { token: ben });
+  check('B pending count is 0', res.status === 200 && res.body?.pending === 0, res.body);
+  expectStatus('pending count needs login', await call('GET', '/api/requests/incoming/count'), 401);
   res = await call('GET', '/api/items/mine', { token: asha });
   check('pending_count shows on owner item', res.body?.items?.find((i) => i.id === drill.id)?.pending_count === 1, res.body);
 

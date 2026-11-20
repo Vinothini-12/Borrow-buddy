@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import { usePendingCount } from '../hooks/usePendingCount.js'
 
 export default function Navbar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const pending = usePendingCount(Boolean(user))
   const close = () => setOpen(false)
 
   function handleLogout() {
@@ -33,7 +35,14 @@ export default function Navbar() {
         </button>
         <nav id="main-nav" className={`nav-links ${open ? 'is-open' : ''}`}>
           <NavLink to="/" end onClick={close}>Home</NavLink>
-          <NavLink to="/my-items" onClick={close}>My Items</NavLink>
+          <NavLink to="/my-items" onClick={close}>
+            My Items
+            {pending > 0 && (
+              <span className="nav-count" aria-label={`, ${pending} pending ${pending === 1 ? 'request' : 'requests'}`}>
+                {pending}
+              </span>
+            )}
+          </NavLink>
           <NavLink to="/my-requests" onClick={close}>My Requests</NavLink>
           <span className="nav-spacer" />
           {user ? (

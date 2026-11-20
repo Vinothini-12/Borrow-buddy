@@ -110,6 +110,12 @@ p { margin: 0 0 0.5rem; }
 .nav-links a:not(.btn):hover { color: var(--text); background: var(--surface-2); }
 .nav-links a.active { color: var(--brand); background: var(--brand-soft); }
 .nav-spacer { flex: 1; }
+.nav-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.3rem; height: 1.3rem; padding: 0 0.35rem; margin-left: 0.4rem;
+  border-radius: 999px; background: var(--brand); color: #fff;
+  font-size: 0.75rem; font-weight: 700; line-height: 1; vertical-align: 1px;
+}
 .nav-user { color: var(--muted); font-size: 0.9rem; margin-right: 0.25rem; }
 .nav-toggle {
   display: none; margin-left: auto; background: none; border: 1px solid var(--border);

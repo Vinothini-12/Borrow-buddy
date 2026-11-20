@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api.js'
+import { notifyRequestsChanged } from '../hooks/usePendingCount.js'
 import { formatDateTime, formatRange } from '../utils/format.js'
 import { ErrorMessage } from './Feedback.jsx'
 import StatusBadge from './StatusBadge.jsx'
@@ -27,6 +28,7 @@ function RequestRow({ request, onUpdated }) {
     try {
       const data = await api(`/api/requests/${request.id}/${action}`, { method: 'PATCH' })
       onUpdated(data.request)
+      notifyRequestsChanged()
     } catch (err) {
       setError(err)
     } finally {
