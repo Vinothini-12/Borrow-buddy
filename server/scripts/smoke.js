@@ -339,7 +339,59 @@ async function requestTests() {
   check('no response leaks password_hash', !res.raw.includes('password_hash'));
 }
 
-const suites = { auth: authTests, items: itemTests, requests: requestTests };
+// ---------------------------------------------------------------- needs
+async function needTests() {
+  console.log('\nNeeds ("Need it" board)');
+  const [asha, ben, chen] = await Promise.all(['asha', 'ben', 'chen'].map((n) => login(`${n}@example.com`)));
+  const drill = await findItem('Power Drill');
+  const calc = await findItem('Calculator');
+  const body = { title: 'Need a drill', description: 'Putting up shelves', category: 'Tools', needed_from: isoDate(3), needed_until: isoDate(4) };
+
+  expectStatus('post need without auth', await call('POST', '/api/needs', { body }), 401);
+  expectStatus('need missing title', await call('POST', '/api/needs', { token: ben, body: { ...body, title: '' } }), 400);
+  expectStatus('need in the past', await call('POST', '/api/needs', { token: ben, body: { ...body, needed_from: isoDate(-1) } }), 400);
+  expectStatus('need until before from', await call('POST', '/api/needs', { token: ben, body: { ...body, needed_until: isoDate(1) } }), 400);
+  expectStatus('need bad category', await call('POST', '/api/needs', { token: ben, body: { ...body, category: 'Cars' } }), 400);
+
+  let res = await call('POST', '/api/needs', { token: ben, body });
+  expectStatus('B posts a need', res, 201);
+  const need = res.body?.need;
+  check('need has poster name and dates', need?.user_name === 'Ben Carter' && need.needed_from === isoDate(3) && need.status === 'open', need);
+
+  res = await call('GET', '/api/needs/matching/count', { token: asha });
+  check('A (owns a Tools item) sees 1 matching need', res.body?.matching === 1, res.body);
+  res = await call('GET', '/api/needs/matching/count', { token: chen });
+  check('C (no Tools item) sees 0 matching', res.body?.matching === 0, res.body);
+  res = await call('GET', '/api/needs', { token: asha });
+  const seenByA = res.body?.needs?.find((n) => n.id === need?.id);
+  check('board flags match for A', seenByA?.matches_my_items === true && seenByA.is_mine === false && seenByA.offered_by_me === false, seenByA);
+  res = await call('GET', '/api/needs?category=Study', { token: asha });
+  check('board category filter', res.status === 200 && !res.body.needs.some((n) => n.id === need?.id), res.body);
+
+  const offer = (token, itemId, needId = need?.id) => call('POST', `/api/needs/${needId}/offers`, { token, body: { item_id: itemId } });
+  expectStatus('cannot offer to own need', await offer(ben, drill.id), 403);
+  expectStatus("cannot offer someone else's item", await offer(asha, calc.id), 403);
+  expectStatus('offer to unknown need', await offer(asha, drill.id, 999999), 404);
+  expectStatus('A offers the drill', await offer(asha, drill.id), 201);
+  res = await offer(asha, drill.id);
+  check('duplicate offer -> 409 ALREADY_OFFERED', res.status === 409 && res.body?.error?.code === 'ALREADY_OFFERED', res.body);
+
+  res = await call('GET', '/api/needs/matching/count', { token: asha });
+  check('badge clears once A has offered', res.body?.matching === 0, res.body);
+  res = await call('GET', '/api/needs/mine', { token: ben });
+  const mine = res.body?.needs?.find((n) => n.id === need?.id);
+  check('B sees the offer with item details', mine?.offers?.length === 1 && mine.offers[0].item_id === drill.id && mine.offers[0].owner_name === 'Asha Kumar', mine);
+
+  expectStatus('non-poster cannot close', await call('PATCH', `/api/needs/${need?.id}/close`, { token: chen }), 403);
+  expectStatus('B closes the need', await call('PATCH', `/api/needs/${need?.id}/close`, { token: ben }), 200);
+  expectStatus('close twice', await call('PATCH', `/api/needs/${need?.id}/close`, { token: ben }), 409);
+  res = await offer(chen, calc.id);
+  check('offer on closed need -> 409 NEED_CLOSED', res.status === 409 && res.body?.error?.code === 'NEED_CLOSED', res.body);
+  res = await call('GET', '/api/needs', { token: asha });
+  check('closed need leaves the board', !res.body?.needs?.some((n) => n.id === need?.id), res.body);
+}
+
+const suites = { auth: authTests, items: itemTests, requests: requestTests, needs: needTests };
 
 try {
   console.log(`Smoke testing ${BASE}`);

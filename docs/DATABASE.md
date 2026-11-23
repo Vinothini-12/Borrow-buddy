@@ -45,6 +45,30 @@
 | `returned_at` | `TIMESTAMPTZ` | Set when status becomes `returned` |
 | `created_at` | `TIMESTAMPTZ` | Default `NOW()` |
 
+### `needs` (migration `003`)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `SERIAL` | PK |
+| `user_id` | `INTEGER` | FK → `users.id`, `ON DELETE CASCADE` (the poster) |
+| `title` | `VARCHAR(120)` | Required |
+| `description` | `TEXT` | Default `''` |
+| `category` | `VARCHAR(50)` | Same fixed list as items (enforced by the API) |
+| `needed_from`, `needed_until` | `DATE` | `needs_dates_check`: `needed_until >= needed_from` |
+| `status` | `VARCHAR(20)` | `needs_status_check`: `open` or `closed`. Expiry is computed (`needed_until < today`), not stored |
+| `created_at` | `TIMESTAMPTZ` | Default `NOW()` |
+
+### `need_offers` (migration `003`)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `SERIAL` | PK |
+| `need_id` | `INTEGER` | FK → `needs.id`, `ON DELETE CASCADE` |
+| `item_id` | `INTEGER` | FK → `items.id`, `ON DELETE CASCADE`. The offerer is the item's owner |
+| `created_at` | `TIMESTAMPTZ` | Default `NOW()` |
+
+`need_offers_unique` (`need_id`, `item_id`) stops the same item being offered twice. Indexes: `needs(status, category)`, `needs(user_id)`, `need_offers(item_id)`.
+
 ## Constraints
 
 | Name | Rule |

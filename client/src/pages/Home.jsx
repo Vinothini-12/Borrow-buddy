@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { EmptyState, ErrorMessage, Loading } from '../components/Feedback.jsx'
 import ItemCard from '../components/ItemCard.jsx'
@@ -122,9 +122,12 @@ export default function Home() {
         {!busy && !error && items.length === 0 && (
           <EmptyState title={near && !search && !category ? `Nothing listed within ${near} km yet` : filtered ? 'No items match your search' : 'Nothing listed yet'}>
             {filtered ? (
-              <button type="button" className="btn btn-ghost" onClick={() => { setDraft(''); setParams({}, { replace: true }) }}>
-                Clear filters
-              </button>
+              <div className="meta-row empty-actions">
+                <Link to={`/needs${search ? `?title=${encodeURIComponent(search)}` : '?title='}`} className="btn">Post a need</Link>
+                <button type="button" className="btn btn-ghost" onClick={() => { setDraft(''); setParams({}, { replace: true }) }}>
+                  Clear filters
+                </button>
+              </div>
             ) : (
               'Be the first to lend something from My Items.'
             )}

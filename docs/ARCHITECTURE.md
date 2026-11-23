@@ -21,7 +21,7 @@ borrowbuddy/
 ├── docs/                       # SCOPE, ARCHITECTURE, API, DATABASE, TESTING
 ├── server/
 │   ├── Dockerfile  .dockerignore  .env.example
-│   ├── migrations/             # 001_init.sql schema, 002_item_location.sql
+│   ├── migrations/             # 001_init.sql schema, 002_item_location.sql, 003_needs.sql
 │   ├── seeds/seed.sql          # 4 demo users, 4 demo items
 │   ├── scripts/
 │   │   ├── dbTarget.js         # parses DATABASE_URL, refuses any db not named "borrowbuddy"
@@ -33,7 +33,7 @@ borrowbuddy/
 │       ├── app.js              # express app, routes, error handler
 │       ├── config.js db.js paths.js constants.js
 │       ├── middleware/         # auth (JWT), validate (zod), upload (multer), errorHandler
-│       ├── routes/             # auth.js, items.js, requests.js
+│       ├── routes/             # auth.js, items.js, requests.js, needs.js
 │       └── utils/              # httpError.js, dates.js
 └── client/
     ├── Dockerfile  nginx.conf  .dockerignore  .env.example
@@ -42,8 +42,8 @@ borrowbuddy/
         ├── context/AuthContext.jsx
         ├── components/         # Navbar, ProtectedRoute, ItemCard, StatusBadge, AddItemForm,
         │                       # IncomingRequests, Feedback (Loading/ErrorMessage/EmptyState)
-        ├── pages/              # Home, ItemDetail, Login, Register, MyItems, MyRequests
-        ├── hooks/usePendingCount.js  # navbar badge polling
+        ├── pages/              # Home, ItemDetail, Login, Register, MyItems, MyRequests, Needs
+        ├── hooks/usePendingCount.js  # navbar badge polling (requests + matching needs)
         └── utils/              # format.js (dates), geo.js (browser location, distance text)
 ```
 
@@ -98,6 +98,9 @@ erDiagram
     users ||--o{ items : "owns"
     users ||--o{ borrow_requests : "makes (borrower)"
     items ||--o{ borrow_requests : "receives"
+    users ||--o{ needs : "posts"
+    needs ||--o{ need_offers : "receives"
+    items ||--o{ need_offers : "offered as"
 
     users {
         serial id PK

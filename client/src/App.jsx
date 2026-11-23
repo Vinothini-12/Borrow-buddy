@@ -7,6 +7,7 @@ import ItemDetail from './pages/ItemDetail.jsx'
 import Login from './pages/Login.jsx'
 import MyItems from './pages/MyItems.jsx'
 import MyRequests from './pages/MyRequests.jsx'
+import Needs from './pages/Needs.jsx'
 import Register from './pages/Register.jsx'
 
 function NotFound() {
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/my-items" element={<ProtectedRoute><MyItems /></ProtectedRoute>} />
           <Route path="/my-requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
+          <Route path="/needs" element={<ProtectedRoute><Needs /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

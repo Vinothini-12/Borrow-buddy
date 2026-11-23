@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { EmptyState, ErrorMessage, Loading } from '../components/Feedback.jsx'
 import { AvailabilityPill, ItemPhoto } from '../components/ItemCard.jsx'
@@ -8,8 +8,13 @@ import { dayCount, formatRange, todayIso } from '../utils/format.js'
 
 function RequestForm({ item }) {
   const today = todayIso()
-  const [start, setStart] = useState('')
-  const [end, setEnd] = useState('')
+  // Dates can be prefilled from a "Need it" offer: /items/5?start=2026-12-01&end=2026-12-03
+  const [params] = useSearchParams()
+  const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '')
+  const initialStart = isDate(params.get('start')) && params.get('start') >= today ? params.get('start') : ''
+  const initialEnd = initialStart && isDate(params.get('end')) && params.get('end') >= initialStart ? params.get('end') : ''
+  const [start, setStart] = useState(initialStart)
+  const [end, setEnd] = useState(initialEnd)
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(null)

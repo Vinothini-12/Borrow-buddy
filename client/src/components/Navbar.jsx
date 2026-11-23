@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import { usePendingCount } from '../hooks/usePendingCount.js'
+import { usePolledCount, useTitleCount } from '../hooks/usePendingCount.js'
 
 export default function Navbar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const pending = usePendingCount(Boolean(user))
+  const pending = usePolledCount(Boolean(user), '/api/requests/incoming/count', 'pending')
+  const matching = usePolledCount(Boolean(user), '/api/needs/matching/count', 'matching')
+  useTitleCount(pending + matching)
   const close = () => setOpen(false)
 
   function handleLogout() {
@@ -44,6 +46,14 @@ export default function Navbar() {
             )}
           </NavLink>
           <NavLink to="/my-requests" onClick={close}>My Requests</NavLink>
+          <NavLink to="/needs" onClick={close}>
+            Need it
+            {matching > 0 && (
+              <span className="nav-count" aria-label={`, ${matching} ${matching === 1 ? 'need' : 'needs'} you can help with`}>
+                {matching}
+              </span>
+            )}
+          </NavLink>
           <span className="nav-spacer" />
           {user ? (
             <>

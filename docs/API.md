@@ -175,6 +175,46 @@ All request endpoints require auth.
 
 ---
 
+## Needs ("Need it" board)
+
+All endpoints require auth. A need is **open** while `status = 'open'` and `needed_until` is today or later.
+
+**Need**
+```json
+{
+  "id": 3, "user_id": 2, "user_name": "Ben Carter", "title": "Ladder", "description": "",
+  "category": "Tools", "needed_from": "2026-11-28", "needed_until": "2026-11-29",
+  "status": "open", "created_at": "2026-11-23T10:00:00.000Z", "offer_count": 1
+}
+```
+
+### `GET /api/needs?category=`
+- Open needs, newest first. Each also has `is_mine`, `offered_by_me`, and `matches_my_items` (someone else's need and the caller owns an available item in that category).
+- **200:** `{ "needs": Need[] }`
+
+### `GET /api/needs/matching/count`
+- Navbar badge: open needs from others that match the caller's available items and that the caller hasn't offered to yet.
+- **200:** `{ "matching": 2 }`
+
+### `GET /api/needs/mine`
+- The caller's needs (any status), each with `expired` and `offers: [{ id, item_id, item_name, item_category, item_image_url, item_availability, owner_name, created_at }]`.
+- **200:** `{ "needs": Need[] }`
+
+### `POST /api/needs`
+- **Body:** `title` (1–120), `description` (optional, ≤1000), `category`, `needed_from` (today or later), `needed_until` (≥ `needed_from`)
+- **201:** `{ "need": Need }`
+- **Errors:** 400 validation / past date · 401
+
+### `POST /api/needs/:id/offers`
+- **Body:** `{ "item_id": 5 }`. Must be the caller's own **available** item.
+- **201:** `{ "offer": { id, need_id, item_id, created_at } }`
+- **Errors:** 403 own need / not your item · 404 need or item · 409 `NEED_CLOSED` · 409 `ITEM_UNAVAILABLE` · 409 `ALREADY_OFFERED`
+
+### `PATCH /api/needs/:id/close`
+- Poster only. `open → closed`.
+- **200:** `{ "need": { id, status: "closed" } }`
+- **Errors:** 403 not the poster · 404 · 409 `INVALID_TRANSITION` (already closed)
+
 ## Other
 
 - `GET /api/health` → `{ "ok": true }`
