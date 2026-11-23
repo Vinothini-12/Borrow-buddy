@@ -161,6 +161,7 @@ p { margin: 0 0 0.5rem; }
 .badge-borrowed { background: var(--st-borrowed-bg); color: var(--st-borrowed-fg); }
 .badge-returned { background: var(--st-returned-bg); color: var(--st-returned-fg); }
 .badge-rejected { background: var(--st-rejected-bg); color: var(--st-rejected-fg); }
+.badge-overdue, .badge-not_returned { background: var(--st-rejected-bg); color: var(--st-rejected-fg); font-weight: 700; }
 
 /* ---------- forms ---------- */
 .form { padding: 1.5rem; display: flex; flex-direction: column; gap: 0.9rem; }
@@ -275,3 +276,4 @@ details summary { cursor: pointer; }
 .thumb.thumb-sm { width: 44px; height: 44px; font-size: 1.1rem; }
 .empty-actions { justify-content: center; }
 .badge.no-cap { text-transform: none; }
+.request-warning { margin: 0.35rem 0 0; color: var(--st-rejected-fg); font-weight: 600; }

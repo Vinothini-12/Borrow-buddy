@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api.js'
 import { notifyRequestsChanged } from '../hooks/usePendingCount.js'
-import { formatDateTime, formatRange } from '../utils/format.js'
+import { formatDate, formatDateTime, formatRange, isOverdue } from '../utils/format.js'
 import { ErrorMessage } from './Feedback.jsx'
 import StatusBadge from './StatusBadge.jsx'
 
@@ -13,16 +13,32 @@ const ACTIONS = {
   ],
   approved: [{ action: 'borrowed', label: 'Mark borrowed', className: 'btn btn-small' }],
   borrowed: [{ action: 'returned', label: 'Mark returned', className: 'btn btn-small' }],
+  not_returned: [{ action: 'returned', label: 'It came back: mark returned', className: 'btn btn-small' }],
 }
 
-const ACTIVE = ['pending', 'approved', 'borrowed']
+const OVERDUE_ACTIONS = [
+  ...ACTIONS.borrowed,
+  { action: 'not-returned', label: 'Report not returned', className: 'btn btn-small btn-danger-ghost' },
+]
+
+const CONFIRM = {
+  reject: (r) => `Reject ${r.borrower_name}'s request?`,
+  'not-returned': (r) =>
+    `Report that ${r.borrower_name} has not returned this item?\n\n` +
+    `They will be blocked from borrowing until you mark it returned, other owners will see a warning, ` +
+    `and this item will be marked unavailable.`,
+}
+
+const ACTIVE = ['pending', 'approved', 'borrowed', 'not_returned']
 
 function RequestRow({ request, onUpdated }) {
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
+  const overdue = isOverdue(request)
+  const actions = overdue ? OVERDUE_ACTIONS : ACTIONS[request.status]
 
   async function run(action) {
-    if (action === 'reject' && !window.confirm(`Reject ${request.borrower_name}'s request?`)) return
+    if (CONFIRM[action] && !window.confirm(CONFIRM[action](request))) return
     setBusy(action)
     setError(null)
     try {
@@ -45,10 +61,10 @@ function RequestRow({ request, onUpdated }) {
             <span className="muted"> · returned {formatDateTime(request.returned_at)}</span>
           )}
         </div>
-        <StatusBadge status={request.status} />
-        {ACTIONS[request.status] && (
+        <StatusBadge status={request.status} request={request} />
+        {actions && (
           <div className="request-row-actions">
-            {ACTIONS[request.status].map(({ action, label, className }) => (
+            {actions.map(({ action, label, className }) => (
               <button key={action} type="button" className={className} disabled={Boolean(busy)} onClick={() => run(action)}>
                 {busy === action ? 'Saving…' : label}
               </button>
@@ -56,6 +72,17 @@ function RequestRow({ request, onUpdated }) {
           </div>
         )}
       </div>
+      {request.status === 'pending' && request.borrower_unreturned > 0 && (
+        <p className="request-warning small">
+          ⚠ {request.borrower_name} has {request.borrower_unreturned} overdue or unreturned item{request.borrower_unreturned === 1 ? '' : 's'}.
+          You can't approve until they return {request.borrower_unreturned === 1 ? 'it' : 'them'}.
+        </p>
+      )}
+      {overdue && (
+        <p className="request-warning small">
+          ⚠ Overdue since {formatDate(request.end_date)}. {request.borrower_name} can't borrow anything else until you mark it returned.
+        </p>
+      )}
       {error && <div className="request-row-error"><ErrorMessage error={error} /></div>}
     </div>
   )

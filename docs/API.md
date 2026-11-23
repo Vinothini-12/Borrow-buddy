@@ -21,7 +21,7 @@ Every error uses the same shape:
 | 401 | `UNAUTHORIZED` | Missing, invalid or expired token; wrong email/password |
 | 403 | `FORBIDDEN` | Not the owner (or not a party to the request); trying to borrow your own item |
 | 404 | `NOT_FOUND` | Item, request or route does not exist |
-| 409 | `EMAIL_TAKEN`, `CONFLICT`, `ITEM_UNAVAILABLE`, `DATES_UNAVAILABLE`, `INVALID_TRANSITION`, `ITEM_HAS_ACTIVE_REQUESTS` | Business-rule conflicts (see each endpoint) |
+| 409 | `EMAIL_TAKEN`, `CONFLICT`, `ITEM_UNAVAILABLE`, `DATES_UNAVAILABLE`, `INVALID_TRANSITION`, `ITEM_HAS_ACTIVE_REQUESTS`, `BORROWER_HAS_OVERDUE`, `NOT_OVERDUE`, `NEED_CLOSED`, `ALREADY_OFFERED` | Business-rule conflicts (see each endpoint) |
 | 500 | `INTERNAL_ERROR` | Unexpected server error (details are logged on the server only) |
 
 ## Objects
@@ -141,14 +141,14 @@ All request endpoints require auth.
   - no **approved or borrowed** request on the item overlaps the range (inclusive). Pending requests don't block.
   - The check and the insert run in one transaction with the item row locked.
 - **201:** `{ "request": Request }` (status `pending`)
-- **Errors:** 400 validation/past date · 403 own item · 404 item not found · 409 `ITEM_UNAVAILABLE` · 409 `DATES_UNAVAILABLE`
+- **Errors:** 400 validation/past date · 403 own item · 404 item not found · 409 `BORROWER_HAS_OVERDUE` (caller holds an overdue or not-returned item) · 409 `ITEM_UNAVAILABLE` · 409 `DATES_UNAVAILABLE`
 
 ### `GET /api/requests/mine`
 - Requests the caller made, newest first.
 - **200:** `{ "requests": Request[] }`
 
 ### `GET /api/requests/incoming`
-- Requests for items the caller owns, ordered by start date.
+- Requests for items the caller owns, ordered by start date. Each also has `borrower_unreturned`: how many items that borrower currently holds overdue or not returned (across all owners).
 - **200:** `{ "requests": Request[] }`
 
 ### `GET /api/requests/incoming/count`
@@ -164,10 +164,11 @@ All request endpoints require auth.
 
 | Endpoint | Allowed from → to | Extra |
 | --- | --- | --- |
-| `PATCH /api/requests/:id/approve` | `pending → approved` | Re-checks overlap against other approved/borrowed requests in a locked transaction. Returns 409 `DATES_UNAVAILABLE` on conflict |
+| `PATCH /api/requests/:id/approve` | `pending → approved` | Re-checks overlap against other approved/borrowed requests in a locked transaction. Returns 409 `DATES_UNAVAILABLE` on conflict, 409 `BORROWER_HAS_OVERDUE` if the borrower holds an overdue/unreturned item |
 | `PATCH /api/requests/:id/reject` | `pending → rejected` | |
 | `PATCH /api/requests/:id/borrowed` | `approved → borrowed` | The handover happened |
-| `PATCH /api/requests/:id/returned` | `borrowed → returned` | Sets `returned_at = NOW()` |
+| `PATCH /api/requests/:id/returned` | `borrowed` or `not_returned` → `returned` | Sets `returned_at = NOW()` |
+| `PATCH /api/requests/:id/not-returned` | `borrowed → not_returned` | Only after `end_date` has passed (else 409 `NOT_OVERDUE`). Also sets the item `unavailable` |
 
 - **Body:** none
 - **200:** `{ "request": Request }` with the new status

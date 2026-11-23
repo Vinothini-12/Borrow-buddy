@@ -30,13 +30,28 @@ const createSchema = z
   })
   .refine((v) => v.end_date >= v.start_date, { message: 'must be on or after start_date', path: ['end_date'] });
 
-// action -> the only status it may start from, and the status it moves to.
+// action -> the statuses it may start from, and the status it moves to.
 const TRANSITIONS = {
-  approve: { from: 'pending', to: 'approved' },
-  reject: { from: 'pending', to: 'rejected' },
-  borrowed: { from: 'approved', to: 'borrowed' },
-  returned: { from: 'borrowed', to: 'returned' },
+  approve: { from: ['pending'], to: 'approved' },
+  reject: { from: ['pending'], to: 'rejected' },
+  borrowed: { from: ['approved'], to: 'borrowed' },
+  // not_returned -> returned: the item came back late after being reported.
+  returned: { from: ['borrowed', 'not_returned'], to: 'returned' },
+  'not-returned': { from: ['borrowed'], to: 'not_returned' },
 };
+
+// Items this borrower is holding past the end date, or never returned. Any of these
+// blocks them from new requests and approvals until the owner marks the item returned.
+async function unreturnedItems(client, borrowerId) {
+  const { rows } = await client.query(
+    `SELECT i.name FROM borrow_requests r JOIN items i ON i.id = r.item_id
+     WHERE r.borrower_id = $1
+       AND (r.status = 'not_returned' OR (r.status = 'borrowed' AND r.end_date < $2))
+     ORDER BY r.end_date LIMIT 3`,
+    [borrowerId, todayIso()],
+  );
+  return rows.map((r) => r.name);
+}
 
 // True if another approved/borrowed request on this item overlaps [start, end] (inclusive).
 async function hasOverlap(client, { itemId, start, end, excludeId = null }) {
@@ -70,6 +85,10 @@ router.post('/', validate(createSchema), async (req, res) => {
     const item = rows[0];
     if (!item) throw notFound('Item not found');
     if (item.owner_id === req.user.id) throw forbidden('You cannot borrow your own item');
+    const overdue = await unreturnedItems(client, req.user.id);
+    if (overdue.length) {
+      throw conflict(`Return your overdue item first (${overdue.join(', ')}). Then you can borrow again.`, 'BORROWER_HAS_OVERDUE');
+    }
     if (item.availability_status !== 'available') {
       throw conflict('This item is not available to borrow right now', 'ITEM_UNAVAILABLE');
     }
@@ -108,9 +127,17 @@ router.get('/incoming/count', async (req, res) => {
 
 // GET /api/requests/incoming  (requests for items I own)
 router.get('/incoming', async (req, res) => {
+  // borrower_unreturned: how many items this borrower currently holds overdue or never returned
+  // (across all owners), so the owner can think twice before approving.
   const { rows } = await query(
-    `${REQUEST_SELECT} WHERE i.owner_id = $1 ORDER BY r.start_date ASC, r.created_at ASC, r.id ASC`,
-    [req.user.id],
+    `SELECT q.*, (
+       SELECT COUNT(*)::int FROM borrow_requests x
+       WHERE x.borrower_id = q.borrower_id
+         AND (x.status = 'not_returned' OR (x.status = 'borrowed' AND x.end_date < $2))
+     ) AS borrower_unreturned
+     FROM (${REQUEST_SELECT} WHERE i.owner_id = $1) q
+     ORDER BY q.start_date ASC, q.created_at ASC, q.id ASC`,
+    [req.user.id, todayIso()],
   );
   res.json({ requests: rows });
 });
@@ -125,7 +152,7 @@ router.get('/:id', validate(idParam, 'params'), async (req, res) => {
   res.json({ request });
 });
 
-// PATCH /api/requests/:id/(approve|reject|borrowed|returned)  (item owner only)
+// PATCH /api/requests/:id/(approve|reject|borrowed|returned|not-returned)  (item owner only)
 for (const [action, { from, to }] of Object.entries(TRANSITIONS)) {
   router.patch(`/:id/${action}`, validate(idParam, 'params'), async (req, res) => {
     const request = await withTransaction(async (client) => {
@@ -136,7 +163,7 @@ for (const [action, { from, to }] of Object.entries(TRANSITIONS)) {
         meta.rows[0].item_id,
       ]);
       const reqRes = await client.query(
-        'SELECT id, item_id, start_date, end_date, status FROM borrow_requests WHERE id = $1 FOR UPDATE',
+        'SELECT id, item_id, borrower_id, start_date, end_date, status FROM borrow_requests WHERE id = $1 FOR UPDATE',
         [req.params.id],
       );
       const current = reqRes.rows[0];
@@ -144,10 +171,17 @@ for (const [action, { from, to }] of Object.entries(TRANSITIONS)) {
       if (itemRes.rows[0].owner_id !== req.user.id) {
         throw forbidden('Only the item owner can update this request');
       }
-      if (current.status !== from) {
-        throw conflict(`Cannot ${action} a request that is ${current.status}`, 'INVALID_TRANSITION');
+      if (!from.includes(current.status)) {
+        throw conflict(`Cannot ${action.replace('-', ' ')} a request that is ${current.status.replace('_', ' ')}`, 'INVALID_TRANSITION');
+      }
+      if (action === 'not-returned' && current.end_date >= todayIso()) {
+        throw conflict('You can report it as not returned only after the end date has passed', 'NOT_OVERDUE');
       }
       if (action === 'approve') {
+        const overdue = await unreturnedItems(client, current.borrower_id);
+        if (overdue.length) {
+          throw conflict('This borrower has an overdue item and cannot borrow until they return it', 'BORROWER_HAS_OVERDUE');
+        }
         const overlap = await hasOverlap(client, {
           itemId: current.item_id,
           start: current.start_date,
@@ -164,6 +198,10 @@ for (const [action, { from, to }] of Object.entries(TRANSITIONS)) {
          WHERE id = $1`,
         [current.id, to],
       );
+      // The item is gone for now, so stop new requests until the owner re-lists it.
+      if (to === 'not_returned') {
+        await client.query(`UPDATE items SET availability_status = 'unavailable' WHERE id = $1`, [current.item_id]);
+      }
       return fetchRequest(current.id, client);
     });
     res.json({ request });

@@ -26,6 +26,7 @@ Success for v1 is a working two-day prototype that demonstrates this flow end to
 8. **Near me** (added after v1): owners can attach an approximate location (browser location, rounded to ~1 km) to an item, and borrowers can filter by distance (1–25 km), nearest first.
 9. **New-request badge** (added after v1): the navbar shows how many requests are waiting on My Items, refreshed every 30 s while the app is open.
 10. **"Need it" board** (added after v1): post what you need (item, category, dates). Neighbours who own an available item in that category see a navbar badge and can offer one of their items. The poster then requests the offered item through the normal borrow flow, with dates prefilled. Needs close manually or expire after their last day.
+11. **Overdue handling** (added after v1): borrowed items past their end date show a red **Overdue** badge to both people. The borrower can't request or be approved for anything else until it's returned. If it never comes back, the owner can **Report not returned**: the record stays, the borrower stays blocked, and other owners see a warning on their requests.
 
 ## Decision: borrowing is free
 

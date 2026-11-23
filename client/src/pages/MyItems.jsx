@@ -110,7 +110,13 @@ export default function MyItems() {
     load()
   }, [load])
 
-  const replaceRequest = (updated) => setRequests((list) => list.map((r) => (r.id === updated.id ? updated : r)))
+  const replaceRequest = (updated) => {
+    setRequests((list) => list.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)))
+    // The server marks the item unavailable when it's reported not returned.
+    if (updated.status === 'not_returned') {
+      setItems((list) => list.map((i) => (i.id === updated.item_id ? { ...i, availability_status: 'unavailable' } : i)))
+    }
+  }
   const replaceItem = (updated) => setItems((list) => list.map((i) => (i.id === updated.id ? { ...i, ...updated } : i)))
 
   return (

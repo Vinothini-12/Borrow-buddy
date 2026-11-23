@@ -2,6 +2,7 @@
 //   npm run db:reset && npm run dev   (in one terminal)
 //   npm run smoke                     (in another)
 import dotenv from 'dotenv';
+import pg from 'pg';
 
 dotenv.config({ quiet: true });
 
@@ -391,7 +392,63 @@ async function needTests() {
   check('closed need leaves the board', !res.body?.needs?.some((n) => n.id === need?.id), res.body);
 }
 
-const suites = { auth: authTests, items: itemTests, requests: requestTests, needs: needTests };
+// ---------------------------------------------------------------- overdue
+// The API never accepts past dates, so this suite moves a test borrow into the past directly
+// in the database (DATABASE_URL, which must point at the "borrowbuddy" database).
+async function overdueTests() {
+  console.log('\nOverdue / not returned');
+  const url = process.env.DATABASE_URL;
+  if (!url || new URL(url).pathname.slice(1) !== 'borrowbuddy') {
+    console.log('  skip (set DATABASE_URL to the borrowbuddy database to run these)');
+    return;
+  }
+  const db = new pg.Client({ connectionString: url });
+  await db.connect();
+  try {
+    const [asha, ben, chen, divya] = await Promise.all(['asha', 'ben', 'chen', 'divya'].map((n) => login(`${n}@example.com`)));
+    const [drill, bike, kit] = await Promise.all(['Power Drill', 'Bicycle', 'Camping Kit'].map(findItem));
+    const request = (token, itemId, from, to) =>
+      call('POST', '/api/requests', { token, body: { item_id: itemId, start_date: isoDate(from), end_date: isoDate(to) } });
+    const act = (token, id, action) => call('PATCH', `/api/requests/${id}/${action}`, { token });
+
+    // Chen has a pending request on Ben's bike, then borrows Divya's kit and keeps it too long.
+    const pendingBike = (await request(chen, bike.id, 80, 81)).body?.request;
+    const kitReq = (await request(chen, kit.id, 82, 83)).body?.request;
+    await act(divya, kitReq?.id, 'approve');
+    await act(divya, kitReq?.id, 'borrowed');
+    expectStatus('cannot report not returned before the end date', await act(divya, kitReq?.id, 'not-returned'), 409);
+    await db.query('UPDATE borrow_requests SET start_date = start_date - 90, end_date = end_date - 90 WHERE id = $1', [kitReq?.id]);
+
+    let res = await request(chen, drill.id, 84, 85);
+    check('overdue borrower cannot request -> 409 BORROWER_HAS_OVERDUE', res.status === 409 && res.body?.error?.code === 'BORROWER_HAS_OVERDUE' && /Camping Kit/.test(res.body.error.message), res.body);
+    res = await act(ben, pendingBike?.id, 'approve');
+    check('owner cannot approve an overdue borrower -> 409', res.status === 409 && res.body?.error?.code === 'BORROWER_HAS_OVERDUE', res.body);
+    res = await call('GET', '/api/requests/incoming', { token: ben });
+    check('owner sees borrower_unreturned warning count', res.body?.requests?.find((r) => r.id === pendingBike?.id)?.borrower_unreturned === 1, res.body);
+
+    expectStatus('non-owner cannot report not returned', await act(chen, kitReq?.id, 'not-returned'), 403);
+    res = await act(divya, kitReq?.id, 'not-returned');
+    check('owner reports not returned', res.status === 200 && res.body?.request?.status === 'not_returned', res.body);
+    res = await call('GET', `/api/items/${kit.id}`);
+    check('item auto-marked unavailable', res.body?.item?.availability_status === 'unavailable', res.body);
+    expectStatus('still blocked while not returned', await request(chen, drill.id, 84, 85), 409);
+    expectStatus('item with not-returned record cannot be deleted', await call('DELETE', `/api/items/${kit.id}`, { token: divya }), 409);
+
+    res = await act(divya, kitReq?.id, 'returned');
+    check('late return clears it (not_returned -> returned)', res.status === 200 && res.body?.request?.status === 'returned' && res.body.request.returned_at, res.body);
+    res = await request(chen, drill.id, 84, 85);
+    expectStatus('borrower can request again after returning', res, 201);
+    expectStatus('owner can approve again', await act(ben, pendingBike?.id, 'approve'), 200);
+
+    // Tidy up so the suite can be re-run.
+    await act(asha, res.body?.request?.id, 'reject');
+    await call('PATCH', `/api/items/${kit.id}`, { token: divya, body: { availability_status: 'available' } });
+  } finally {
+    await db.end();
+  }
+}
+
+const suites = { auth: authTests, items: itemTests, requests: requestTests, needs: needTests, overdue: overdueTests };
 
 try {
   console.log(`Smoke testing ${BASE}`);

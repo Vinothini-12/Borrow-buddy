@@ -3,10 +3,10 @@ export const CATEGORIES = ['Tools', 'Sports', 'Study', 'Outdoor', 'Electronics',
 
 export const AVAILABILITY = ['available', 'unavailable'];
 
-export const REQUEST_STATUS = ['pending', 'approved', 'borrowed', 'returned', 'rejected'];
+export const REQUEST_STATUS = ['pending', 'approved', 'borrowed', 'returned', 'rejected', 'not_returned'];
 
-// Requests that still tie up the item.
-export const ACTIVE_STATUSES = ['pending', 'approved', 'borrowed'];
+// Requests that still tie up the item (not_returned keeps the record, so the item can't be deleted).
+export const ACTIVE_STATUSES = ['pending', 'approved', 'borrowed', 'not_returned'];
 
 // Requests that block the item's calendar for their date range.
 export const BLOCKING_STATUSES = ['approved', 'borrowed'];

@@ -4,15 +4,16 @@ import { api } from '../api.js'
 import { EmptyState, ErrorMessage, Loading } from '../components/Feedback.jsx'
 import { ItemPhoto } from '../components/ItemCard.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
-import { formatDate, formatDateTime, formatRange } from '../utils/format.js'
+import { formatDate, formatDateTime, formatRange, isOverdue, statusLabel } from '../utils/format.js'
 
-const FILTERS = ['all', 'pending', 'approved', 'borrowed', 'returned', 'rejected']
+const FILTERS = ['all', 'pending', 'approved', 'borrowed', 'returned', 'rejected', 'not_returned']
 
 const HINTS = {
   pending: 'Waiting for the owner to respond.',
   approved: 'Approved! Arrange the handover with the owner.',
   borrowed: 'You have this item. Return it by the end date.',
   rejected: 'The owner declined this request.',
+  not_returned: 'The owner reported this item as not returned. Return it to borrow again.',
 }
 
 export default function MyRequests() {
@@ -40,6 +41,7 @@ export default function MyRequests() {
 
   const counts = requests.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] || 0) + 1 }), {})
   const shown = filter === 'all' ? requests : requests.filter((r) => r.status === filter)
+  const late = requests.filter((r) => isOverdue(r) || r.status === 'not_returned')
 
   return (
     <div className="container section">
@@ -55,12 +57,21 @@ export default function MyRequests() {
       )}
       {!loading && !error && requests.length > 0 && (
         <>
+          {late.length > 0 && (
+            <div className="alert alert-error" role="alert">
+              <span>
+                <strong>Please return {late.map((r) => r.item_name).join(', ')}.</strong> It's past the end date, so you can't
+                borrow anything else until the owner marks it returned.
+              </span>
+            </div>
+          )}
           <div className="filter-tabs" role="group" aria-label="Filter by status">
             {FILTERS.map((f) => {
               const n = f === 'all' ? requests.length : counts[f] || 0
+              if (f === 'not_returned' && n === 0) return null
               return (
                 <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}>
-                  {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)} ({n})
+                  {f === 'all' ? 'All' : statusLabel(f)} ({n})
                 </button>
               )
             })}
@@ -75,7 +86,7 @@ export default function MyRequests() {
                   <div className="request-card-info">
                     <div className="meta-row">
                       <Link to={`/items/${r.item_id}`} className="my-item-title">{r.item_name}</Link>
-                      <StatusBadge status={r.status} />
+                      <StatusBadge status={r.status} request={r} />
                     </div>
                     <p className="small request-card-line">
                       {formatRange(r.start_date, r.end_date)} · from {r.owner_name}
@@ -83,7 +94,9 @@ export default function MyRequests() {
                     <p className="muted small request-card-line">
                       {r.status === 'returned'
                         ? `Returned ${formatDateTime(r.returned_at)}.`
-                        : HINTS[r.status]}{' '}
+                        : isOverdue(r)
+                          ? `Overdue! It was due back ${formatDate(r.end_date)}. Please return it.`
+                          : HINTS[r.status]}{' '}
                       Requested {formatDate(r.created_at)}.
                     </p>
                   </div>

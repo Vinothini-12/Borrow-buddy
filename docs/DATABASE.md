@@ -77,7 +77,7 @@
 | `items.availability_status` CHECK | `IN ('available','unavailable')` |
 | `items_location_check` | `latitude`/`longitude` both set or both null, within ±90 / ±180 |
 | `borrow_requests_dates_check` | `end_date >= start_date` |
-| `borrow_requests_status_check` | `status IN ('pending','approved','borrowed','returned','rejected')` |
+| `borrow_requests_status_check` | `status IN ('pending','approved','borrowed','returned','rejected','not_returned')` (`not_returned` added in migration `004`) |
 
 These rules are enforced in application code, not by DB constraints:
 
@@ -102,12 +102,17 @@ stateDiagram-v2
     pending --> rejected: owner rejects
     approved --> borrowed: owner marks handover done
     borrowed --> returned: owner marks returned<br/>(sets returned_at)
+    borrowed --> not_returned: owner reports not returned<br/>(only after end_date; item set unavailable)
+    not_returned --> returned: item came back late
     rejected --> [*]
     returned --> [*]
 ```
 
 - Only the item's **owner** can move a request between states.
 - Any other transition (for example `approved → rejected`, `pending → borrowed`, `returned → approved`) returns **409 `INVALID_TRANSITION`**.
+- **Overdue** is computed, not stored: `status = 'borrowed' AND end_date < today`.
+- A borrower with any overdue or `not_returned` request **cannot create requests or be approved** (409 `BORROWER_HAS_OVERDUE`) until the owner marks it returned.
+- `not_returned` counts as active, so the item can't be deleted while that record exists.
 - `approved` and `borrowed` **block** the item's calendar for `[start_date, end_date]` (inclusive). `pending`, `rejected` and `returned` do not.
 
 ## Seed data

@@ -29,3 +29,21 @@ export function dayCount(start, end) {
   const [y2, m2, d2] = end.split('-').map(Number)
   return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000) + 1
 }
+
+// Borrowed and past its end date (computed; the server applies the same rule).
+export function isOverdue(request) {
+  return request.status === 'borrowed' && request.end_date < todayIso()
+}
+
+const STATUS_LABELS = {
+  pending: 'Pending',
+  approved: 'Approved',
+  borrowed: 'Borrowed',
+  returned: 'Returned',
+  rejected: 'Rejected',
+  not_returned: 'Not returned',
+}
+
+export function statusLabel(status) {
+  return STATUS_LABELS[status] || status
+}

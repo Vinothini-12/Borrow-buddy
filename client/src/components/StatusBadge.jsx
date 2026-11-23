@@ -1,11 +1,7 @@
-const LABELS = {
-  pending: 'Pending',
-  approved: 'Approved',
-  borrowed: 'Borrowed',
-  returned: 'Returned',
-  rejected: 'Rejected',
-}
+import { isOverdue, statusLabel } from '../utils/format.js'
 
-export default function StatusBadge({ status }) {
-  return <span className={`badge badge-${status}`}>{LABELS[status] || status}</span>
+// Pass the whole request so a late "borrowed" shows as Overdue.
+export default function StatusBadge({ status, request }) {
+  if (request && isOverdue(request)) return <span className="badge badge-overdue">Overdue</span>
+  return <span className={`badge badge-${status}`}>{statusLabel(status)}</span>
 }

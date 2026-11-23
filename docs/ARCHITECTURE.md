@@ -86,10 +86,10 @@ On the client, `api.js` wraps `fetch`. It attaches the token, parses the error s
 | --- | --- |
 | Browse / view item | Anyone |
 | Create item | Any logged-in user |
-| Edit / delete item | Item owner (delete blocked while pending/approved/borrowed requests exist) |
+| Edit / delete item | Item owner (delete blocked while pending/approved/borrowed/not-returned requests exist) |
 | Create request | Any logged-in user except the item owner; item must be available; dates must not overlap approved/borrowed requests |
 | View a request | Borrower or item owner |
-| Approve / reject / mark borrowed / mark returned | Item owner only |
+| Approve / reject / mark borrowed / mark returned / report not returned | Item owner only |
 
 ## ER diagram
 
@@ -127,7 +127,7 @@ erDiagram
         int borrower_id FK
         date start_date
         date end_date
-        varchar status "pending | approved | borrowed | returned | rejected"
+        varchar status "pending | approved | borrowed | returned | rejected | not_returned"
         timestamptz returned_at
         timestamptz created_at
     }
