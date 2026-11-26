@@ -20,9 +20,32 @@ export function AvailabilityPill({ status }) {
   )
 }
 
+const MAX_TILT = 8 // degrees
+
+// Tilt the card toward the mouse. Writes CSS variables directly, so no re-renders.
+function handleTilt(e) {
+  if (e.pointerType !== 'mouse') return
+  const el = e.currentTarget
+  const r = el.getBoundingClientRect()
+  const x = (e.clientX - r.left) / r.width // 0..1
+  const y = (e.clientY - r.top) / r.height
+  el.classList.add('is-tilting')
+  el.style.setProperty('--ry', `${((x - 0.5) * 2 * MAX_TILT).toFixed(2)}deg`)
+  el.style.setProperty('--rx', `${((0.5 - y) * 2 * MAX_TILT).toFixed(2)}deg`)
+  el.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`)
+  el.style.setProperty('--my', `${(y * 100).toFixed(1)}%`)
+}
+
+function resetTilt(e) {
+  const el = e.currentTarget
+  el.classList.remove('is-tilting')
+  el.style.setProperty('--rx', '0deg')
+  el.style.setProperty('--ry', '0deg')
+}
+
 export default function ItemCard({ item }) {
   return (
-    <Link to={`/items/${item.id}`} className="card item-card">
+    <Link to={`/items/${item.id}`} className="card item-card" onPointerMove={handleTilt} onPointerLeave={resetTilt}>
       <ItemPhoto item={item} />
       <div className="item-card-body">
         <div className="item-card-top">

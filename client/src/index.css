@@ -83,6 +83,10 @@ p { margin: 0 0 0.5rem; }
 }
 .btn:hover { background: var(--brand-hover); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+/* 3D press: solid buttons sit on a small ledge and sink when clicked. */
+.btn { box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18), 0 6px 12px -4px rgba(20, 30, 25, 0.25); transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s; }
+.btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18), 0 10px 18px -6px rgba(20, 30, 25, 0.3); }
+.btn:not(:disabled):active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.18), 0 2px 4px rgba(20, 30, 25, 0.2); }
 .btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .nav-toggle:focus-visible {
   outline: 2px solid var(--brand); outline-offset: 2px;
 }
@@ -139,8 +143,20 @@ p { margin: 0 0 0.5rem; }
 /* ---------- cards & grid ---------- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1.25rem; }
-.item-card { overflow: hidden; color: inherit; text-decoration: none; display: flex; flex-direction: column; transition: transform 0.15s, box-shadow 0.15s; }
-.item-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(20, 30, 25, 0.1); }
+/* 3D tilt: ItemCard sets --rx/--ry (tilt) and --mx/--my (shine position) from the mouse. */
+.item-card {
+  position: relative; overflow: hidden; color: inherit; text-decoration: none; display: flex; flex-direction: column;
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(var(--lift, 0px));
+  transform-style: preserve-3d; transition: transform 0.35s ease, box-shadow 0.35s ease; will-change: transform;
+}
+.item-card:hover { --lift: -6px; box-shadow: 0 22px 40px -12px rgba(20, 30, 25, 0.28), 0 6px 14px rgba(20, 30, 25, 0.08); }
+.item-card.is-tilting { transition: transform 0.08s linear, box-shadow 0.35s ease; }
+.item-card::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), var(--shine, rgba(255, 255, 255, 0.35)), transparent 60%);
+  opacity: 0; transition: opacity 0.35s ease;
+}
+.item-card:hover::after { opacity: 1; }
 .item-card .item-photo { aspect-ratio: 4 / 3; }
 .item-card-body { padding: 0.9rem 1rem 1rem; }
 .item-card-top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
@@ -277,3 +293,17 @@ details summary { cursor: pointer; }
 .empty-actions { justify-content: center; }
 .badge.no-cap { text-transform: none; }
 .request-warning { margin: 0.35rem 0 0; color: var(--st-rejected-fg); font-weight: 600; }
+
+/* ---------- 3D: ghost buttons and list cards ---------- */
+.btn-ghost, .btn-danger-ghost { box-shadow: 0 2px 0 var(--border); }
+.btn-ghost:not(:disabled):hover, .btn-danger-ghost:not(:disabled):hover { box-shadow: 0 3px 0 var(--border); }
+.btn-ghost:not(:disabled):active, .btn-danger-ghost:not(:disabled):active { box-shadow: 0 0 0 var(--border); }
+.my-item, .need-card, .request-card { transition: transform 0.25s ease, box-shadow 0.25s ease; }
+.my-item:hover, .need-card:hover, .request-card:hover { transform: translateY(-2px); box-shadow: 0 14px 28px -14px rgba(20, 30, 25, 0.3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .item-card, .item-card.is-tilting, .btn, .my-item, .need-card, .request-card { transition: none; transform: none !important; }
+  .item-card::after { display: none; }
+}
+
+@media (prefers-color-scheme: dark) { .item-card { --shine: rgba(255, 255, 255, 0.1); } }
