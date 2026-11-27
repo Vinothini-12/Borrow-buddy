@@ -1,0 +1,12 @@
+# Netlify hosts only the React client. The Express API and Postgres must run elsewhere
+# (e.g. Render + Neon); set VITE_API_URL in Netlify's environment variables to the API URL.
+[build]
+  base = "client"
+  command = "npm run build"
+  publish = "dist"
+
+# React Router handles routes like /my-items in the browser; serve index.html for them.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
